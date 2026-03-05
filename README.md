@@ -78,15 +78,27 @@ Tools without active authorizations are hidden. When an authorization expires, t
 
 ## Quick Start
 
-### Option A: Docker (Recommended)
+### Option A: One-Line Install (Recommended)
+
+Requires [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
-docker compose up --build
+docker run -d --name hap-demo -p 3000:3000 -p 3030:3030 -v hap-data:/app/data ghcr.io/humanagencyprotocol/hap-demo
 ```
 
 Open `http://localhost:3000`. The MCP server is available at `http://localhost:3030`.
 
-### Option B: Local Development
+To stop: `docker stop hap-demo`. To restart: `docker start hap-demo`. To remove: `docker rm -f hap-demo`.
+
+### Option B: Build from Source
+
+```bash
+git clone https://github.com/humanagencyprotocol/hap-demo.git
+cd hap-demo
+docker compose up --build
+```
+
+### Option C: Local Development
 
 Three terminals:
 
