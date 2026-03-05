@@ -1,0 +1,18 @@
+{
+  "name": "hap-platform",
+  "private": true,
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:ui": "pnpm --filter @hap/ui dev",
+    "dev:mcp": "pnpm --filter @hap/mcp-server dev",
+    "dev:control": "pnpm --filter @hap/control-plane dev"
+  },
+  "dependencies": {
+    "react-router-dom": "^7.13.1"
+  }
+}

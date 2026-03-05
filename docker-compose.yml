@@ -1,0 +1,15 @@
+services:
+  hap:
+    build: .
+    ports:
+      - "${HAP_UI_PORT:-3000}:3000"
+      - "${HAP_MCP_PORT:-3030}:3030"
+    volumes:
+      - hap-data:/app/data
+    environment:
+      - HAP_SP_URL=https://service.humanagencyprotocol.org
+    network_mode: bridge
+    restart: unless-stopped
+
+volumes:
+  hap-data:
