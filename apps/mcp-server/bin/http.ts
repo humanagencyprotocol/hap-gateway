@@ -7,7 +7,7 @@
  * from the control-plane via loopback.
  *
  * Environment variables:
- * - HAP_SP_URL — SP server URL (default: https://service.humanagencyprotocol.org)
+ * - HAP_SP_URL — SP server URL (default: https://www.humanagencyprotocol.com)
  * - HAP_MCP_PORT — HTTP port (default: 3030)
  */
 
@@ -21,12 +21,16 @@ import { createMcpServer } from '../src/index';
 import { verifyGateContentHashes } from '../src/lib/gate-content';
 import type { GateContent } from '../src/lib/gate-store';
 
-const spUrl = process.env.HAP_SP_URL ?? 'https://service.humanagencyprotocol.org';
+const spUrl = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
 const port = parseInt(process.env.HAP_MCP_PORT ?? '3030', 10);
 
 // ─── Shared state (one instance for all connections) ───────────────────────
 
 const state = new SharedState(spUrl);
+
+// ─── Service credentials held in memory for connector use ──────────────────
+
+const serviceCredentials = new Map<string, Record<string, string>>();
 
 // ─── Track active MCP sessions for refresh propagation ─────────────────────
 
@@ -52,7 +56,9 @@ app.use((_req, res, next) => {
   next();
 });
 
-// ─── Internal-only middleware ──────────────────────────────────────────────
+// ─── Internal-only middleware (loopback + shared secret) ──────────────────
+
+const INTERNAL_SECRET = process.env.HAP_INTERNAL_SECRET ?? '';
 
 function internalOnly(req: Request, res: Response, next: NextFunction): void {
   const ip = req.ip ?? req.socket.remoteAddress ?? '';
@@ -61,19 +67,34 @@ function internalOnly(req: Request, res: Response, next: NextFunction): void {
     res.status(403).json({ error: 'Internal endpoint — loopback only' });
     return;
   }
+  // Validate shared secret (if configured)
+  const secret = req.headers['x-internal-secret'] as string | undefined;
+  if (INTERNAL_SECRET && secret !== INTERNAL_SECRET) {
+    res.status(403).json({ error: 'Invalid internal secret' });
+    return;
+  }
   next();
 }
 
 // ─── Internal endpoints (control-plane → MCP) ─────────────────────────────
 
 app.post('/internal/configure', internalOnly, (req: Request, res: Response) => {
-  const { sessionCookie } = req.body as { sessionCookie?: string };
+  const { sessionCookie, vaultKeyHex } = req.body as {
+    sessionCookie?: string;
+    vaultKeyHex?: string;
+  };
   if (!sessionCookie) {
     res.status(400).json({ error: 'Missing sessionCookie' });
     return;
   }
   state.spClient.setSessionCookie(sessionCookie);
   console.error('[HAP MCP] Session cookie configured by control-plane');
+
+  if (vaultKeyHex) {
+    state.gateStore.setVaultKey(Buffer.from(vaultKeyHex, 'hex'));
+    console.error('[HAP MCP] Vault key configured — gate store encryption active');
+  }
+
   res.json({ ok: true });
 });
 
@@ -104,7 +125,7 @@ app.post('/internal/gate-content', internalOnly, async (req: Request, res: Respo
       return;
     }
 
-    // Store gate content
+    // Store gate content (encrypted if vault key is set)
     state.setGateContent(path, frameHash, auth.profileId, gateContent);
     console.error(`[HAP MCP] Gate content accepted for ${path}`);
 
@@ -124,9 +145,18 @@ app.post('/internal/gate-content', internalOnly, async (req: Request, res: Respo
   }
 });
 
-app.post('/internal/service-credentials', internalOnly, (_req: Request, res: Response) => {
-  // Phase 1 stub — credential vault not yet implemented
-  res.status(501).json({ error: 'Not implemented — credential vault coming in Phase 2' });
+app.post('/internal/service-credentials', internalOnly, (req: Request, res: Response) => {
+  const { serviceId, credentials } = req.body as {
+    serviceId?: string;
+    credentials?: Record<string, string>;
+  };
+  if (!serviceId || !credentials) {
+    res.status(400).json({ error: 'Missing serviceId or credentials' });
+    return;
+  }
+  serviceCredentials.set(serviceId, credentials);
+  console.error(`[HAP MCP] Service credentials stored for ${serviceId}`);
+  res.json({ ok: true });
 });
 
 // ─── SSE transport (for mcporter / OpenClaw) ────────────────────────────────
@@ -218,6 +248,7 @@ app.get('/health', (_req: Request, res: Response) => {
     sp: spUrl,
     activeSessions: activeSessions.size,
     storedGates: state.gateStore.getAll().length,
+    serviceCredentials: Array.from(serviceCredentials.keys()),
   });
 });
 

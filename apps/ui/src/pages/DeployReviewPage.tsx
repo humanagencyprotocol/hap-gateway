@@ -1,42 +1,60 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { spClient, type GitHubPullDetail } from '../lib/sp-client';
 import { StepIndicator } from '../components/StepIndicator';
 import { GroupSelector } from '../components/GroupSelector';
 import { DomainBadge } from '../components/DomainBadge';
 
-const MOCK_PR = {
-  repo: 'acme/api-gateway',
-  number: 142,
-  title: 'feat: add rate limiting to payment endpoints',
-  branch: 'feature/rate-limit',
-  base: 'main',
-  author: 'jsmith',
-  filesChanged: 5,
-  additions: 142,
-  deletions: 23,
-  sha: 'a1b2c3d4e5f6',
-  domains: [
-    { name: 'engineering', attested: true },
-    { name: 'release_management', attested: false },
-  ],
-  files: [
-    { path: 'src/middleware/rate-limiter.ts', additions: 89, deletions: 0 },
-    { path: 'src/routes/payment.ts', additions: 23, deletions: 5 },
-    { path: 'src/config/defaults.ts', additions: 12, deletions: 3 },
-    { path: 'tests/rate-limiter.test.ts', additions: 45, deletions: 0 },
-    { path: 'package.json', additions: 3, deletions: 1 },
-  ],
-};
-
 export function DeployReviewPage() {
   const { activeGroup, activeDomain } = useAuth();
-  const [prRef, setPrRef] = useState('acme/api-gateway#142');
-  const [prLoaded, setPrLoaded] = useState(false);
+  const [prRef, setPrRef] = useState('');
+  const [prData, setPrData] = useState<GitHubPullDetail | null>(null);
+  const [prLoading, setPrLoading] = useState(false);
+  const [prError, setPrError] = useState('');
   const [deployStep, setDeployStep] = useState(1);
   const [gateContent, setGateContent] = useState({ problem: '', objective: '', tradeoffs: '' });
 
+  // GitHub repos/PRs for selection
+  const [repos, setRepos] = useState<Array<{ fullName: string; description: string | null }>>([]);
+  const [ghConfigured, setGhConfigured] = useState(false);
+
   const GATE_KEYS = ['problem', 'objective', 'tradeoffs'] as const;
   const gateStep = deployStep - 3; // 3->0=problem, 4->1=objective, 5->2=tradeoffs
+
+  // Check GitHub config on mount
+  useEffect(() => {
+    spClient.getCredential('github-pat').then(status => {
+      setGhConfigured(status.configured);
+      if (status.configured) {
+        spClient.getGitHubRepos().then(r => setRepos(r)).catch(() => {});
+      }
+    }).catch(() => {});
+  }, []);
+
+  const loadPR = useCallback(async () => {
+    if (!prRef.trim()) return;
+
+    // Parse owner/repo#number
+    const match = prRef.match(/^([^/]+)\/([^#]+)#(\d+)$/);
+    if (!match) {
+      setPrError('Format: owner/repo#number');
+      return;
+    }
+
+    const [, owner, repo, number] = match;
+    setPrLoading(true);
+    setPrError('');
+    setPrData(null);
+
+    try {
+      const data = await spClient.getGitHubPull(owner, repo, parseInt(number));
+      setPrData(data);
+    } catch (err) {
+      setPrError(err instanceof Error ? err.message : 'Failed to load PR');
+    } finally {
+      setPrLoading(false);
+    }
+  }, [prRef]);
 
   return (
     <>
@@ -88,6 +106,22 @@ export function DeployReviewPage() {
       {/* PR Loader */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h3 className="card-title" style={{ marginBottom: '0.5rem' }}>Load Pull Request</h3>
+
+        {!ghConfigured && (
+          <div className="status-banner status-banner-warn" style={{ marginBottom: '0.75rem', fontSize: '0.8rem' }}>
+            <span className="status-banner-icon">{'\u26A0'}</span>
+            <span className="status-banner-text">
+              GitHub PAT not configured. Go to Settings &gt; General to add one.
+            </span>
+          </div>
+        )}
+
+        {repos.length > 0 && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
+            Repos: {repos.slice(0, 5).map(r => r.fullName).join(', ')}{repos.length > 5 ? '...' : ''}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
           <input
             className="form-input"
@@ -96,32 +130,37 @@ export function DeployReviewPage() {
             placeholder="owner/repo#number"
             style={{ flex: 1, fontFamily: "'SF Mono', Monaco, monospace", fontSize: '0.85rem' }}
           />
-          <button className="btn btn-primary" onClick={() => setPrLoaded(true)}>Load</button>
+          <button
+            className="btn btn-primary"
+            onClick={loadPR}
+            disabled={prLoading || !ghConfigured}
+          >
+            {prLoading ? 'Loading...' : 'Load'}
+          </button>
         </div>
 
-        {prLoaded && (
+        {prError && (
+          <div className="alert alert-error" style={{ marginBottom: '0.75rem' }}>{prError}</div>
+        )}
+
+        {prData && (
           <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '0.5rem', padding: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.375rem' }}>
-              <span style={{ fontWeight: 600 }}>{MOCK_PR.title}</span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>#{MOCK_PR.number}</span>
+              <span style={{ fontWeight: 600 }}>{prData.title}</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>#{prData.number}</span>
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-              <code style={{ fontSize: '0.75rem' }}>{MOCK_PR.branch}</code>
+              <code style={{ fontSize: '0.75rem' }}>{prData.branch}</code>
               {' \u2192 '}
-              <code style={{ fontSize: '0.75rem' }}>{MOCK_PR.base}</code>
-              {' \u00B7 '}by {MOCK_PR.author} {'\u00B7'} {MOCK_PR.filesChanged} files changed {'\u00B7'} +{MOCK_PR.additions} -{MOCK_PR.deletions}
-            </div>
-            <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
-              {MOCK_PR.domains.map(d => (
-                <DomainBadge key={d.name} domain={d.name} attested={d.attested} />
-              ))}
+              <code style={{ fontSize: '0.75rem' }}>{prData.base}</code>
+              {' \u00B7 '}by {prData.author} {'\u00B7'} {prData.filesChanged} files changed {'\u00B7'} +{prData.additions} -{prData.deletions}
             </div>
           </div>
         )}
       </div>
 
       {/* Deploy Gate Wizard */}
-      {prLoaded && (
+      {prData && (
         <div className="card">
           <StepIndicator currentStep={deployStep} />
 
@@ -153,27 +192,20 @@ export function DeployReviewPage() {
                   Resolved Execution Context
                 </div>
                 <dl className="review-grid" style={{ marginBottom: 0 }}>
-                  <dt>Profile</dt><dd>deploy-gate@0.3</dd>
-                  <dt>Path</dt><dd>standard-deploy</dd>
-                  <dt>Repo</dt><dd><code>{MOCK_PR.repo}</code></dd>
-                  <dt>SHA</dt><dd><code style={{ fontSize: '0.8rem' }}>{MOCK_PR.sha}</code></dd>
-                  <dt>Changed Paths</dt><dd>{MOCK_PR.filesChanged} files</dd>
-                  <dt>Required</dt>
-                  <dd>
-                    {MOCK_PR.domains.map(d => (
-                      <DomainBadge key={d.name} domain={d.name} attested={d.attested} />
-                    ))}
-                  </dd>
+                  <dt>PR</dt><dd><code>{prRef}</code></dd>
+                  <dt>Title</dt><dd>{prData.title}</dd>
+                  <dt>SHA</dt><dd><code style={{ fontSize: '0.8rem' }}>{prData.sha}</code></dd>
+                  <dt>Changed Paths</dt><dd>{prData.filesChanged} files</dd>
                 </dl>
               </div>
 
               {/* Changed files accordion */}
               <details style={{ marginBottom: '1rem' }}>
                 <summary style={{ fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', padding: '0.5rem 0', color: 'var(--text-secondary)' }}>
-                  Changed Files ({MOCK_PR.filesChanged})
+                  Changed Files ({prData.filesChanged})
                 </summary>
                 <div style={{ padding: '0.5rem 0', fontSize: '0.85rem' }}>
-                  {MOCK_PR.files.map(f => (
+                  {prData.files.map(f => (
                     <div key={f.path} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px solid var(--border)' }}>
                       <code style={{ fontSize: '0.8rem' }}>{f.path}</code>
                       <span style={{ fontSize: '0.75rem', color: 'var(--accent)' }}>+{f.additions} -{f.deletions}</span>
@@ -233,9 +265,9 @@ export function DeployReviewPage() {
                 Review your deploy attestation before signing.
               </p>
               <dl className="review-grid">
-                <dt>PR</dt><dd>{MOCK_PR.repo}#{MOCK_PR.number}</dd>
-                <dt>Title</dt><dd>{MOCK_PR.title}</dd>
-                <dt>SHA</dt><dd><code>{MOCK_PR.sha}</code></dd>
+                <dt>PR</dt><dd>{prRef}</dd>
+                <dt>Title</dt><dd>{prData.title}</dd>
+                <dt>SHA</dt><dd><code>{prData.sha}</code></dd>
               </dl>
               <div className="gate-content-block">
                 {GATE_KEYS.map(key => (

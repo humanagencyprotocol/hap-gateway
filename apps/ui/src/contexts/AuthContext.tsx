@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { spClient, type SPUser, type SPGroup } from '../lib/sp-client';
 
 interface AuthContextValue {
@@ -29,6 +29,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError('');
     try {
+      // Set API key on client BEFORE login call so the header is sent
+      spClient.setApiKey(apiKey);
       const u = await spClient.login(apiKey);
       const allGroups = await spClient.getGroups();
       setUser(u);
@@ -42,6 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (e) {
+      // Clear API key on failed login
+      spClient.clearApiKey();
       setError(e instanceof Error ? e.message : 'Login failed');
       throw e;
     } finally {
@@ -51,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await spClient.logout();
+    spClient.clearApiKey();
     setUser(null);
     setGroups([]);
     setActiveGroup(null);

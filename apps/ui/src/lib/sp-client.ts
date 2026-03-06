@@ -2,7 +2,8 @@
  * SP API Client for Platform UI
  *
  * All requests go through the control-plane, which proxies /api/* to the SP.
- * Authentication is cookie-based (session cookie set by /auth/login).
+ * Authentication is API-key-based (X-API-Key header on every request).
+ * No cookies are used — the API key is stored in React state only.
  */
 
 export interface SPUser {
@@ -61,22 +62,81 @@ export interface AttestationsResult {
   attested_domains?: string[];
 }
 
+export interface VaultStatus {
+  initialized: boolean;
+  credentialNames: string[];
+  serviceCount: number;
+}
+
+export interface ServiceDef {
+  id: string;
+  name: string;
+  description: string;
+  icon?: string;
+  tools?: string[];
+  profile?: string;
+  status: 'connected' | 'missing' | 'error';
+  credFields: Array<{ label: string; key: string; type: 'text' | 'password'; placeholder?: string }>;
+}
+
+export interface AIPresets {
+  presets: Record<string, { provider: string; endpoint: string; model: string }>;
+}
+
+export interface GitHubRepo {
+  fullName: string;
+  description: string | null;
+  private: boolean;
+  updatedAt: string;
+}
+
+export interface GitHubPull {
+  number: number;
+  title: string;
+  author: string;
+  branch: string;
+  base: string;
+  sha: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GitHubPullDetail extends GitHubPull {
+  body: string | null;
+  additions: number;
+  deletions: number;
+  filesChanged: number;
+  files: Array<{ path: string; additions: number; deletions: number; status: string }>;
+}
+
 class SPClient {
+  private apiKey: string | null = null;
+
+  setApiKey(key: string): void {
+    this.apiKey = key;
+  }
+
+  clearApiKey(): void {
+    this.apiKey = null;
+  }
+
   private async fetch(path: string, init?: RequestInit): Promise<Response> {
     return globalThis.fetch(path, {
       ...init,
-      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
         ...init?.headers,
       },
     });
   }
 
+  // ─── Auth ─────────────────────────────────────────────────────────────
+
   async login(apiKey: string): Promise<SPUser> {
     const res = await this.fetch('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ apiKey }),
+      headers: { 'X-API-Key': apiKey },
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Invalid API key' }));
@@ -89,6 +149,8 @@ class SPClient {
   async logout(): Promise<void> {
     await this.fetch('/auth/logout', { method: 'POST' });
   }
+
+  // ─── SP proxy ─────────────────────────────────────────────────────────
 
   async getGroups(): Promise<SPGroup[]> {
     const res = await this.fetch('/api/groups');
@@ -135,7 +197,8 @@ class SPClient {
   async getPending(domain: string): Promise<PendingItem[]> {
     const res = await this.fetch(`/api/attestations/pending?domain=${encodeURIComponent(domain)}`);
     if (!res.ok) throw new Error(`Failed to fetch pending: ${res.status}`);
-    return res.json();
+    const data = await res.json();
+    return data.pending ?? data;
   }
 
   async getAttestations(frameHash: string): Promise<AttestationsResult> {
@@ -160,7 +223,6 @@ class SPClient {
       throw new Error(err.error || `Create group failed: ${res.status}`);
     }
     const data = await res.json();
-    // SP returns { group: {...}, inviteCode } — unwrap
     const g = data.group || data;
     return { id: g.id, name: g.name, myDomains: g.myDomains || [], isAdmin: true };
   }
@@ -187,6 +249,122 @@ class SPClient {
       const err = await res.json().catch(() => ({ error: 'Unknown error' }));
       throw new Error(err.error || `Invite failed: ${res.status}`);
     }
+    return res.json();
+  }
+
+  // ─── Vault ────────────────────────────────────────────────────────────
+
+  async getVaultStatus(): Promise<VaultStatus> {
+    const res = await this.fetch('/vault/status');
+    if (!res.ok) throw new Error(`Failed to fetch vault status: ${res.status}`);
+    return res.json();
+  }
+
+  async getCredential(name: string): Promise<{ configured: boolean; fieldNames?: string[] }> {
+    const res = await this.fetch(`/vault/credentials/${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error(`Failed to check credential: ${res.status}`);
+    return res.json();
+  }
+
+  async setCredential(name: string, fields: Record<string, string>): Promise<void> {
+    const res = await this.fetch(`/vault/credentials/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify(fields),
+    });
+    if (!res.ok) throw new Error(`Failed to save credential: ${res.status}`);
+  }
+
+  async deleteCredential(name: string): Promise<void> {
+    const res = await this.fetch(`/vault/credentials/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error(`Failed to delete credential: ${res.status}`);
+  }
+
+  async testCredential(name: string): Promise<{ ok: boolean; message: string }> {
+    const res = await this.fetch(`/vault/test/${encodeURIComponent(name)}`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error(`Test failed: ${res.status}`);
+    return res.json();
+  }
+
+  // ─── Services ─────────────────────────────────────────────────────────
+
+  async getServices(): Promise<ServiceDef[]> {
+    const res = await this.fetch('/vault/services');
+    if (!res.ok) throw new Error(`Failed to fetch services: ${res.status}`);
+    const data = await res.json();
+    return data.services;
+  }
+
+  async addService(id: string, service: Omit<ServiceDef, 'status'> & { credentials?: Record<string, string> }): Promise<void> {
+    const res = await this.fetch(`/vault/services/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(service),
+    });
+    if (!res.ok) throw new Error(`Failed to save service: ${res.status}`);
+  }
+
+  async deleteService(id: string): Promise<void> {
+    const res = await this.fetch(`/vault/services/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error(`Failed to delete service: ${res.status}`);
+  }
+
+  // ─── AI ───────────────────────────────────────────────────────────────
+
+  async aiAssist(request: {
+    gate: 'problem' | 'objective' | 'tradeoffs';
+    currentText: string;
+    context?: { profileId?: string; path?: string; bounds?: string };
+  }): Promise<{ success: boolean; suggestion?: string; error?: string; disclaimer: string }> {
+    const res = await this.fetch('/ai/assist', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'AI request failed' }));
+      return { success: false, error: err.error, disclaimer: 'AI surfaces reality. You supply intent.' };
+    }
+    return res.json();
+  }
+
+  async aiTest(config?: { provider?: string; endpoint?: string; model?: string; apiKey?: string }): Promise<{ ok: boolean; message: string }> {
+    const res = await this.fetch('/ai/test', {
+      method: 'POST',
+      body: JSON.stringify(config ?? {}),
+    });
+    if (!res.ok) throw new Error(`AI test failed: ${res.status}`);
+    return res.json();
+  }
+
+  async getAIPresets(): Promise<AIPresets> {
+    const res = await this.fetch('/ai/presets');
+    if (!res.ok) throw new Error(`Failed to fetch AI presets: ${res.status}`);
+    return res.json();
+  }
+
+  // ─── GitHub ───────────────────────────────────────────────────────────
+
+  async getGitHubRepos(): Promise<GitHubRepo[]> {
+    const res = await this.fetch('/github/repos');
+    if (!res.ok) throw new Error(`Failed to fetch repos: ${res.status}`);
+    const data = await res.json();
+    return data.repos;
+  }
+
+  async getGitHubPulls(owner: string, repo: string): Promise<GitHubPull[]> {
+    const res = await this.fetch(`/github/pulls?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`);
+    if (!res.ok) throw new Error(`Failed to fetch pulls: ${res.status}`);
+    const data = await res.json();
+    return data.pulls;
+  }
+
+  async getGitHubPull(owner: string, repo: string, number: number): Promise<GitHubPullDetail> {
+    const res = await this.fetch(`/github/pull?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&number=${number}`);
+    if (!res.ok) throw new Error(`Failed to fetch PR: ${res.status}`);
     return res.json();
   }
 }

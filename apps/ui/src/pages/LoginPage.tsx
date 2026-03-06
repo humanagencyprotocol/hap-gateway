@@ -96,16 +96,16 @@ export function LoginPage() {
 
             <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
-                Create a free account on the Service Provider,<br />then come back to sign in.
+                Create a demo account on Humanagencyprotocol.com,<br />then come back to sign in.
               </p>
               <a
-                href="https://service.humanagencyprotocol.org/register"
+                href="https://www.humanagencyprotocol.com/register"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary btn-full"
                 style={{ textDecoration: 'none' }}
               >
-                Create Account on SP
+                Create Demo Account
               </a>
             </div>
 

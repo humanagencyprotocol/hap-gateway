@@ -4,16 +4,20 @@ import { TopNav } from '../components/TopNav';
 import { useAuth } from '../contexts/AuthContext';
 import { spClient } from '../lib/sp-client';
 
+type Mode = null | 'single' | 'team';
+
 export function OnboardingPage() {
   const { setActiveContext, refreshGroups } = useAuth();
   const navigate = useNavigate();
+  const [mode, setMode] = useState<Mode>(null);
   const [inviteCode, setInviteCode] = useState('');
   const [groupName, setGroupName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSingleDomain = () => {
-    // Skip group selection — go straight to dashboard
+    setMode('single');
+    setActiveContext(null, 'personal');
     navigate('/');
   };
 
@@ -25,7 +29,7 @@ export function OnboardingPage() {
       const result = await spClient.joinGroup(inviteCode.trim());
       await refreshGroups();
       setActiveContext(result, result.myDomains[0] || '');
-      navigate('/');
+      navigate('/groups');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to join group');
     } finally {
@@ -41,7 +45,7 @@ export function OnboardingPage() {
       const result = await spClient.createGroup(groupName.trim());
       await refreshGroups();
       setActiveContext(result, result.myDomains[0] || '');
-      navigate('/');
+      navigate('/groups');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create group');
     } finally {
@@ -66,7 +70,7 @@ export function OnboardingPage() {
 
           {/* Two paths */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
-            <div className="selection-card" onClick={handleSingleDomain} style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
+            <div className={`selection-card${mode === 'single' ? ' selected' : ''}`} onClick={handleSingleDomain} style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
               <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>{'\u25C8'}</div>
               <div className="selection-card-title" style={{ marginBottom: '0.375rem' }}>Single Domain</div>
               <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1rem' }}>
@@ -75,7 +79,7 @@ export function OnboardingPage() {
               <span style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 500 }}>No group needed</span>
             </div>
 
-            <div className="selection-card selected" style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
+            <div className={`selection-card${mode === 'team' ? ' selected' : ''}`} onClick={() => setMode('team')} style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
               <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>{'\u25C9'}</div>
               <div className="selection-card-title" style={{ marginBottom: '0.375rem' }}>Team (Group)</div>
               <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1rem' }}>
@@ -85,45 +89,49 @@ export function OnboardingPage() {
             </div>
           </div>
 
-          {/* Join group */}
-          <div className="card" style={{ marginBottom: '1rem' }}>
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Join an existing group</h4>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Ask your team admin for an invite code.
-            </p>
-            <div className="invite-input-row">
-              <input
-                className="form-input"
-                placeholder="Paste invite code..."
-                value={inviteCode}
-                onChange={e => setInviteCode(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleJoin()}
-                style={{ fontFamily: "'SF Mono', Monaco, monospace", fontSize: '0.85rem' }}
-                disabled={loading}
-              />
-              <button className="btn btn-primary" onClick={handleJoin} disabled={loading}>Join</button>
-            </div>
-          </div>
+          {mode === 'team' && (
+            <>
+              {/* Join group */}
+              <div className="card" style={{ marginBottom: '1rem' }}>
+                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Join an existing group</h4>
+                <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                  Ask your team admin for an invite code.
+                </p>
+                <div className="invite-input-row">
+                  <input
+                    className="form-input"
+                    placeholder="Paste invite code..."
+                    value={inviteCode}
+                    onChange={e => setInviteCode(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleJoin()}
+                    style={{ fontFamily: "'SF Mono', Monaco, monospace", fontSize: '0.85rem' }}
+                    disabled={loading}
+                  />
+                  <button className="btn btn-primary" onClick={handleJoin} disabled={loading}>Join</button>
+                </div>
+              </div>
 
-          {/* Create group */}
-          <div className="card">
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Create a new group</h4>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Start a new team and invite members. Assign domains after creation.
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <input
-                className="form-input"
-                placeholder="Group name (e.g., Acme Corp)"
-                value={groupName}
-                onChange={e => setGroupName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                style={{ flex: 1 }}
-                disabled={loading}
-              />
-              <button className="btn btn-secondary" onClick={handleCreate} disabled={loading}>Create</button>
-            </div>
-          </div>
+              {/* Create group */}
+              <div className="card">
+                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Create a new group</h4>
+                <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                  Start a new team and invite members. Assign domains after creation.
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    className="form-input"
+                    placeholder="Group name (e.g., Acme Corp)"
+                    value={groupName}
+                    onChange={e => setGroupName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                    style={{ flex: 1 }}
+                    disabled={loading}
+                  />
+                  <button className="btn btn-secondary" onClick={handleCreate} disabled={loading}>Create</button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </>

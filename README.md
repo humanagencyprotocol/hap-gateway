@@ -311,7 +311,7 @@ demo-hap/
 
 | Variable | Default | Description |
 |---|---|---|
-| `HAP_SP_URL` | `https://service.humanagencyprotocol.org` | External Service Provider URL |
+| `HAP_SP_URL` | `https://www.humanagencyprotocol.com` | External Service Provider URL |
 | `HAP_CP_PORT` | `3000` | Control Plane port |
 | `HAP_MCP_PORT` | `3030` | MCP Server port |
 | `HAP_MCP_INTERNAL_URL` | `http://127.0.0.1:3030` | MCP internal endpoint (Control Plane → MCP) |
@@ -331,7 +331,7 @@ docker compose up --build
 # Or build manually
 docker build -t hap-demo .
 docker run -p 3000:3000 -p 3030:3030 \
-  -e HAP_SP_URL=https://service.humanagencyprotocol.org \
+  -e HAP_SP_URL=https://www.humanagencyprotocol.com \
   -v hap-data:/app/data \
   hap-demo
 ```

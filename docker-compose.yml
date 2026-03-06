@@ -7,7 +7,7 @@ services:
     volumes:
       - hap-data:/app/data
     environment:
-      - HAP_SP_URL=https://service.humanagencyprotocol.org
+      - HAP_SP_URL=https://www.humanagencyprotocol.com
     network_mode: bridge
     restart: unless-stopped
 

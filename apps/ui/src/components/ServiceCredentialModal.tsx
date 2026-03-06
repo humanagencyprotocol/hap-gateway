@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { spClient } from '../lib/sp-client';
 
 interface CredField {
   label: string;
@@ -8,6 +9,7 @@ interface CredField {
 }
 
 interface Props {
+  serviceId: string;
   serviceName: string;
   fields: CredField[];
   connected: boolean;
@@ -15,19 +17,33 @@ interface Props {
   onSave: (values: Record<string, string>) => void;
 }
 
-export function ServiceCredentialModal({ serviceName, fields, connected, onClose, onSave }: Props) {
+export function ServiceCredentialModal({ serviceId, serviceName, fields, connected, onClose, onSave }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [existingFields, setExistingFields] = useState<string[]>([]);
 
-  const handleTest = () => {
+  // Load existing credential status on open
+  useEffect(() => {
+    spClient.getCredential(serviceId).then(status => {
+      if (status.configured && status.fieldNames) {
+        setExistingFields(status.fieldNames);
+      }
+    }).catch(() => {/* ignore */});
+  }, [serviceId]);
+
+  const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    setTimeout(() => {
+    try {
+      const result = await spClient.testCredential(serviceId);
+      setTestResult(result);
+    } catch (err) {
+      setTestResult({ ok: false, message: err instanceof Error ? err.message : 'Test failed' });
+    } finally {
       setTesting(false);
-      setTestResult('success');
-    }, 1000);
+    }
   };
 
   return (
@@ -46,6 +62,13 @@ export function ServiceCredentialModal({ serviceName, fields, connected, onClose
               {connected ? 'Connected' : 'Not configured'}
             </span>
           </div>
+
+          {/* Show existing field names (values masked) */}
+          {existingFields.length > 0 && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.75rem' }}>
+              Configured fields: {existingFields.join(', ')}
+            </div>
+          )}
 
           {/* Credential fields */}
           {fields.map(field => (
@@ -87,11 +110,10 @@ export function ServiceCredentialModal({ serviceName, fields, connected, onClose
             </span>
           </div>
 
-          {testResult === 'success' && (
-            <div className="alert alert-success">Connection test passed.</div>
-          )}
-          {testResult === 'error' && (
-            <div className="alert alert-error">Connection test failed.</div>
+          {testResult && (
+            <div className={`alert ${testResult.ok ? 'alert-success' : 'alert-error'}`}>
+              {testResult.message}
+            </div>
           )}
         </div>
 
