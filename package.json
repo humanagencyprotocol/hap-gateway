@@ -10,9 +10,13 @@
     "build": "pnpm -r build",
     "dev:ui": "pnpm --filter @hap/ui dev",
     "dev:mcp": "pnpm --filter @hap/mcp-server dev",
-    "dev:control": "pnpm --filter @hap/control-plane dev"
+    "dev:control": "pnpm --filter @hap/control-plane dev",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "react-router-dom": "^7.13.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }
