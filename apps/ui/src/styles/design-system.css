@@ -630,7 +630,7 @@ code {
 
 .alert-error { background: var(--danger); }
 .alert-info { background: var(--accent); }
-.alert-success { background: var(--accent); }
+.alert-success { background: #1a7f37; }
 
 /* ══════════════════════════════════════════════
    TABS

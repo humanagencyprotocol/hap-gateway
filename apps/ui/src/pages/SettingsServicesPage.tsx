@@ -4,6 +4,34 @@ import { ServiceCredentialModal } from '../components/ServiceCredentialModal';
 
 type TabId = 'general' | 'services' | 'mcp';
 
+const PROVIDER_CONFIG: Record<string, { provider: string; endpoint: string; models: string[] }> = {
+  ollama: {
+    provider: 'ollama',
+    endpoint: 'http://localhost:11434',
+    models: ['llama3.2', 'llama3.1', 'mistral', 'codellama', 'gemma2', 'phi3', 'qwen2.5'],
+  },
+  openai: {
+    provider: 'openai-compatible',
+    endpoint: 'https://api.openai.com/v1',
+    models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o3-mini'],
+  },
+  groq: {
+    provider: 'openai-compatible',
+    endpoint: 'https://api.groq.com/openai/v1',
+    models: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'gemma2-9b-it', 'mixtral-8x7b-32768'],
+  },
+  together: {
+    provider: 'openai-compatible',
+    endpoint: 'https://api.together.xyz/v1',
+    models: ['meta-llama/Llama-3-8b-chat-hf', 'meta-llama/Llama-3-70b-chat-hf', 'mistralai/Mixtral-8x7B-Instruct-v0.1'],
+  },
+  openrouter: {
+    provider: 'openai-compatible',
+    endpoint: 'https://openrouter.ai/api/v1',
+    models: ['anthropic/claude-sonnet-4', 'anthropic/claude-haiku-4', 'openai/gpt-4o-mini', 'openai/gpt-4o', 'google/gemini-2.5-flash', 'meta-llama/llama-3.1-8b-instruct'],
+  },
+};
+
 export function SettingsServicesPage() {
   const [activeTab, setActiveTab] = useState<TabId>('services');
   const [services, setServices] = useState<ServiceDef[]>([]);
@@ -65,6 +93,7 @@ export function SettingsServicesPage() {
         if (ep.includes('openai.com')) setAiPreset('openai');
         else if (ep.includes('groq.com')) setAiPreset('groq');
         else if (ep.includes('together.xyz')) setAiPreset('together');
+        else if (ep.includes('openrouter.ai')) setAiPreset('openrouter');
         else setAiPreset('ollama');
       }
     } catch {
@@ -77,18 +106,13 @@ export function SettingsServicesPage() {
     loadGeneralStatus();
   }, [loadServices, loadGeneralStatus]);
 
-  const handleAiPresetChange = async (preset: string) => {
+  const handleAiPresetChange = (preset: string) => {
     setAiPreset(preset);
-    try {
-      const data = await spClient.getAIPresets();
-      const p = data.presets[preset];
-      if (p) {
-        setAiProvider(p.provider);
-        setAiEndpoint(p.endpoint);
-        setAiModel(p.model);
-      }
-    } catch {
-      // ignore
+    const cfg = PROVIDER_CONFIG[preset];
+    if (cfg) {
+      setAiProvider(cfg.provider);
+      setAiEndpoint(cfg.endpoint);
+      setAiModel(cfg.models[0]);
     }
   };
 
@@ -261,27 +285,45 @@ export function SettingsServicesPage() {
                 <option value="openai">OpenAI</option>
                 <option value="groq">Groq</option>
                 <option value="together">Together</option>
+                <option value="openrouter">OpenRouter</option>
               </select>
             </div>
 
             <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-              <label className="form-label">Endpoint</label>
-              <input
-                className="form-input"
-                value={aiEndpoint}
-                onChange={e => setAiEndpoint(e.target.value)}
-                placeholder="http://localhost:11434"
-              />
-            </div>
-
-            <div className="form-group" style={{ marginBottom: '0.75rem' }}>
               <label className="form-label">Model</label>
-              <input
-                className="form-input"
-                value={aiModel}
-                onChange={e => setAiModel(e.target.value)}
-                placeholder="llama3.2"
-              />
+              {(() => {
+                const models = PROVIDER_CONFIG[aiPreset]?.models ?? [];
+                const isKnown = models.includes(aiModel);
+                return (
+                  <>
+                    <select
+                      className="form-input"
+                      value={isKnown ? aiModel : '__custom__'}
+                      onChange={e => {
+                        if (e.target.value === '__custom__') {
+                          setAiModel('');
+                        } else {
+                          setAiModel(e.target.value);
+                        }
+                      }}
+                      style={{ marginBottom: !isKnown ? '0.375rem' : undefined }}
+                    >
+                      {models.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                      <option value="__custom__">Custom model...</option>
+                    </select>
+                    {!isKnown && (
+                      <input
+                        className="form-input"
+                        value={aiModel}
+                        onChange={e => setAiModel(e.target.value)}
+                        placeholder="Enter model name"
+                      />
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             <div className="form-group" style={{ marginBottom: '1rem' }}>
@@ -295,20 +337,22 @@ export function SettingsServicesPage() {
               />
             </div>
 
-            {aiTestResult && (
-              <div className={`alert ${aiTestResult.startsWith('OK') ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: '0.75rem' }}>
-                {aiTestResult}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button className="btn btn-ghost" onClick={testAi} disabled={aiTesting}>
-                {aiTesting ? 'Testing...' : 'Test Connection'}
-              </button>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <button className="btn btn-primary" onClick={saveAiConfig} disabled={aiSaving}>
                 {aiSaving ? 'Saving...' : 'Save & Encrypt'}
               </button>
+              {aiConfigured && (
+                <button className="btn btn-ghost" onClick={testAi} disabled={aiTesting}>
+                  {aiTesting ? 'Testing...' : 'Test Connection'}
+                </button>
+              )}
             </div>
+
+            {aiTestResult && (
+              <div className={`alert ${aiTestResult.startsWith('OK') ? 'alert-success' : 'alert-error'}`} style={{ marginTop: '0.75rem' }}>
+                {aiTestResult}
+              </div>
+            )}
           </div>
 
           {/* GitHub Access card */}

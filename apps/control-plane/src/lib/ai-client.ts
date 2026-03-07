@@ -36,6 +36,11 @@ export const PROVIDER_PRESETS: Record<string, AIConfig> = {
     endpoint: 'https://api.together.xyz/v1',
     model: 'meta-llama/Llama-3-8b-chat-hf',
   },
+  openrouter: {
+    provider: 'openai-compatible',
+    endpoint: 'https://openrouter.ai/api/v1',
+    model: 'anthropic/claude-sonnet-4',
+  },
 };
 
 export interface AIAssistRequest {

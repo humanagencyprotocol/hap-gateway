@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { verify } from '../src/gatekeeper';
-import { PAYMENT_GATE_PROFILE } from '../src/profiles/payment-gate';
+import { registerProfile } from '../src/profiles';
+import { PAYMENT_GATE_PROFILE } from './fixtures';
 import { generateTestKeyPair, createTestAttestation, type TestKeyPair } from './helpers';
 import type { AgentFrameParams } from '../src/types';
 
@@ -25,6 +26,7 @@ describe('gatekeeper', () => {
   };
 
   beforeAll(async () => {
+    registerProfile('payment-gate@0.3', PAYMENT_GATE_PROFILE);
     keyPair = await generateTestKeyPair();
     wrongKeyPair = await generateTestKeyPair();
   });

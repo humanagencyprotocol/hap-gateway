@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { getProfile, listProfiles, getAllProfiles } from '../src/profiles';
-import { PAYMENT_GATE_PROFILE } from '../src/profiles/payment-gate';
-import { COMMS_SEND_PROFILE } from '../src/profiles/comms-send';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { getProfile, listProfiles, getAllProfiles, registerProfile } from '../src/profiles';
+import { PAYMENT_GATE_PROFILE, COMMS_SEND_PROFILE } from './fixtures';
+
+beforeAll(() => {
+  registerProfile('payment-gate@0.3', PAYMENT_GATE_PROFILE);
+  registerProfile('comms-send@0.3', COMMS_SEND_PROFILE);
+});
 
 describe('profiles', () => {
   describe('getProfile', () => {

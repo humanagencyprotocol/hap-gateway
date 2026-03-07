@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canonicalFrame, computeFrameHash, validateFrameParams } from '../src/frame';
-import { PAYMENT_GATE_PROFILE } from '../src/profiles/payment-gate';
-import { COMMS_SEND_PROFILE } from '../src/profiles/comms-send';
+import { PAYMENT_GATE_PROFILE, COMMS_SEND_PROFILE } from './fixtures';
 
 describe('frame', () => {
   describe('canonicalFrame', () => {
