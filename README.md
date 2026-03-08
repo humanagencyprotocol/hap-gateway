@@ -2,7 +2,7 @@
 
 HAP is AI-native control infrastructure for agent operations. It places a cryptographic gate between AI agents and real-world tools — Stripe, GitHub, email, databases, and cloud infrastructure. Every action must fit human-defined bounds or it does not execute. Agents connect through a single MCP endpoint. Authorizations are cryptographically signed, time-limited, and fully auditable.
 
-This repository contains the open-source reference implementation of the [Human Agency Protocol](https://humanagencyprotocol.org). It connects to the Service Provider at [humanagencyprotocol.com](https://humanagencyprotocol.com) for attestation signing, domain verification, and audit trails. The team behind HAP runs its own AI-native company on this stack — dogfooding the protocol in production to prove that governed agent operations work at the scale of a real organization.
+This repository contains the open-source reference implementation of the [Human Agency Protocol](https://humanagencyprotocol.org). It connects to the Service Provider at [humanagencyprotocol.com](https://humanagencyprotocol.com) for attestation signing, domain verification, and audit trails. This implementation exists to bootstrap an AI-native company that builds a HAP Service Provider business — built on the same protocol it is based on, governed by the infrastructure it provides. The goal is to grow from a solo founder into a team that runs entirely on HAP from day one.
 
 > **Alpha (v0.1.0-alpha)** — This software is under active development. APIs, configuration formats, and behavior may change without notice. Not recommended for production use with high-value operations. No support is provided. Use at your own risk.
 
