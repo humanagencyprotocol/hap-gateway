@@ -1,8 +1,8 @@
-# HAP — Open Source Authorization Infrastructure for AI Agents
+# HAP Agent Gateway
 
-HAP is AI-native control infrastructure for agent operations. It places a cryptographic gate between AI agents and real-world tools — Stripe, GitHub, email, databases, and cloud infrastructure. Every action must fit human-defined bounds or it does not execute. Agents connect through a single MCP endpoint. Authorizations are cryptographically signed, time-limited, and fully auditable.
+HAP Gateway is the open-source runtime for the [Human Agency Protocol](https://humanagencyprotocol.org). It sits between AI agents and real-world tools — Stripe, GitHub, email, databases, and cloud infrastructure — enforcing cryptographically signed, human-defined bounds on every action. Agents connect through a single MCP endpoint, and every tool call is verified before execution.
 
-This repository contains the open-source reference implementation of the [Human Agency Protocol](https://humanagencyprotocol.org). It connects to the Service Provider at [humanagencyprotocol.com](https://humanagencyprotocol.com) for attestation signing, domain verification, and audit trails. This implementation exists to bootstrap an AI-native company that builds a HAP Service Provider business — built on the same protocol it is based on, governed by the infrastructure it provides. The goal is to grow from a solo founder into a team that runs entirely on HAP from day one.
+The gateway connects to the HAP Service Provider at [humanagencyprotocol.com](https://humanagencyprotocol.com) for attestation signing, domain management, and audit trails. This repository contains the reference gateway implementation used by the HAP team to run its own AI-native company in production.
 
 > **Alpha (v0.1.0-alpha)** — This software is under active development. APIs, configuration formats, and behavior may change without notice. Not recommended for production use with high-value operations. No support is provided. Use at your own risk.
 
