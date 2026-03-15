@@ -83,7 +83,7 @@ describe('MCP Gateway', () => {
             a: { field: 'amount', divisor: 100 },
             b: 'currency',
           },
-          staticExecution: { target_env: 'production' },
+          staticExecution: { action_type: 'charge' },
         },
         overrides: {
           echo: null,

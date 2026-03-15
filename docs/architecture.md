@@ -31,7 +31,7 @@ Read-only tools (`list-authorizations`, `check-pending-attestations`) are always
 | `spend-routine` | finance | 24 hours |
 | `spend-reviewed` | finance + compliance | 4 hours |
 
-Bounds: `amount_max` (number, max), `currency` (string, enum), `action_type` (string, enum), `target_env` (string, enum)
+Bounds: `amount_max` (number, max), `currency` (string, enum), `action_type` (string, enum)
 
 **`publish@0.3`** — External communications
 
@@ -40,7 +40,7 @@ Bounds: `amount_max` (number, max), `currency` (string, enum), `action_type` (st
 | `publish-transactional` | engineering | 24 hours |
 | `publish-marketing` | marketing + product | 2 hours |
 
-Bounds: `recipient_max` (number, max), `channel` (string, enum), `audience` (string, enum), `target_env` (string, enum)
+Bounds: `recipient_max` (number, max), `channel` (string, enum), `audience` (string, enum), `scope` (string, enum)
 
 ## Project Structure
 

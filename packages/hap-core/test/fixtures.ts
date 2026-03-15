@@ -91,7 +91,7 @@ export const PUBLISH_PROFILE: AgentProfile = {
   description: 'External communication authority — governs sending anything externally as the company',
 
   frameSchema: {
-    keyOrder: ['profile', 'path', 'channel', 'audience', 'recipient_max', 'target_env'],
+    keyOrder: ['profile', 'path', 'channel', 'audience', 'recipient_max', 'scope'],
     fields: {
       profile: { type: 'string', required: true },
       path: { type: 'string', required: true },
@@ -113,10 +113,10 @@ export const PUBLISH_PROFILE: AgentProfile = {
         description: 'Maximum recipients per send operation',
         constraint: { type: 'number', enforceable: ['max'] },
       },
-      target_env: {
+      scope: {
         type: 'string',
         required: true,
-        description: 'Target environment (production or sandbox)',
+        description: 'Impact scope (external = real customers, internal = test accounts)',
         constraint: { type: 'string', enforceable: ['enum'] },
       },
     },
@@ -142,9 +142,9 @@ export const PUBLISH_PROFILE: AgentProfile = {
         required: true,
         constraint: { type: 'number', enforceable: ['max'] },
       },
-      target_env: {
+      scope: {
         source: 'declared',
-        description: 'Target environment',
+        description: 'Impact scope of this send',
         required: true,
         constraint: { type: 'string', enforceable: ['enum'] },
       },

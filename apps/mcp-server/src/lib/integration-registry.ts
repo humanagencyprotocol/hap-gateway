@@ -19,7 +19,7 @@ import type { ExecutionMappingValue } from '@hap/core';
  * - executionMapping: maps tool argument names to execution context fields
  *   that the Gatekeeper checks against frame bounds.
  * - staticExecution: constant values merged into the execution context
- *   (e.g., { target_env: "production" } when no tool arg provides it).
+ *   (e.g., { scope: "external" } when no tool arg provides it).
  */
 export interface ToolGatingConfig {
   profile: string | null;

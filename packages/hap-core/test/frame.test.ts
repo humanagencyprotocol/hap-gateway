@@ -39,12 +39,12 @@ describe('frame', () => {
         channel: 'email',
         audience: 'individual',
         recipient_max: 5,
-        target_env: 'production',
+        scope: 'external',
       };
 
       const result = canonicalFrame(frame, PUBLISH_PROFILE);
       expect(result).toBe(
-        'profile=publish@0.3\npath=publish-transactional\nchannel=email\naudience=individual\nrecipient_max=5\ntarget_env=production'
+        'profile=publish@0.3\npath=publish-transactional\nchannel=email\naudience=individual\nrecipient_max=5\nscope=external'
       );
     });
 

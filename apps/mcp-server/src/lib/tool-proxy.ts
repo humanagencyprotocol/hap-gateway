@@ -34,7 +34,7 @@ export function createGatedToolHandler(
   const { profile, executionMapping, staticExecution } = tool.gating;
 
   return async (args: Record<string, unknown>) => {
-    // Start with static values (e.g., target_env: "production")
+    // Start with static values (e.g., scope: "external")
     const execution: Record<string, string | number> = { ...staticExecution };
 
     // Build execution context from tool args using the mapping
