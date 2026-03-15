@@ -4,11 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { TopNav } from '../components/TopNav';
 
 const FEATURES = [
-  { icon: '\u25A0', title: 'Set Boundaries', desc: 'Define what an agent can do \u2014 amounts, channels, recipients. Every authorization is time-limited by default.' },
-  { icon: '\u25C9', title: 'Multi-Domain Authority', desc: 'Critical actions need sign-off from multiple domain owners. A payment agent only activates when both finance and compliance attest.' },
-  { icon: '\u26A0', title: 'Gate Enforcement', desc: 'The agent is blocked at runtime if it tries to exceed bounds or the attestation has expired. No silent failures.' },
-  { icon: '\u21B7', title: 'Deploy Reviews', desc: 'Attest Git pull requests through a structured six-gate review flow before changes reach the real world.' },
-  { icon: '\u2630', title: 'Audit Everything', desc: 'Every authorization, attestation, and enforcement event is logged and traceable.' },
+  { icon: '\u25A0', title: 'Authorize Agents', desc: 'Define what each agent can do, which tools it can access, and for how long. Every authorization is time-limited.' },
+  { icon: '\u25C9', title: 'Enforce at Runtime', desc: 'The gateway intercepts every tool call. Unauthorized or expired actions are blocked before they reach external services.' },
+  { icon: '\u26A0', title: 'Secure Vault', desc: 'API keys and credentials are encrypted at rest. Agents never see raw secrets \u2014 the gateway resolves them at the point of tool execution.' },
+  { icon: '\u21B7', title: 'Deploy Reviews', desc: 'Review pull requests through a structured gate flow before code reaches production. Every merge requires human attestation.' },
+  { icon: '\u2630', title: 'Audit Trail', desc: 'Every authorization, tool call, and enforcement decision is logged locally. Full visibility into what agents did and why.' },
 ];
 
 export function LoginPage() {
@@ -35,10 +35,10 @@ export function LoginPage() {
         <div className="login-split-left">
           <div style={{ maxWidth: '28rem' }}>
             <h1 style={{ fontSize: 'clamp(2.25rem, 4vw, 3.25rem)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '1.25rem' }}>
-              Human Agency<br />Protocol Demo
+              The Local<br /><span style={{ color: 'var(--accent)' }}>AI Agent Gateway</span>
             </h1>
             <p style={{ fontSize: '1.125rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '3rem' }}>
-              AI agents act in the real world with real consequences. HAP ensures they only act within limits you define.
+              The gateway sits between your AI agents and external tools. Agents only get access to what you've authorized — nothing more, nothing less.
             </p>
             <div style={{ display: 'grid', gap: '2rem' }}>
               {FEATURES.map(f => (
@@ -105,7 +105,7 @@ export function LoginPage() {
                 className="btn btn-secondary btn-full"
                 style={{ textDecoration: 'none' }}
               >
-                Create Demo Account
+                Create Account
               </a>
             </div>
 
@@ -114,7 +114,7 @@ export function LoginPage() {
                 Getting started
               </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                {['Create an account at the Service Provider', 'Join or create a group to get domain authority', 'Sign in here to authorize agents or review deploys'].map((text, i) => (
+                {['Create an account at humanagencyprotocol.com', 'Join or create a team to get domain authority', 'Sign in here with your API key to start authorizing agents'].map((text, i) => (
                   <div key={i} style={{ display: 'flex', gap: '0.625rem', alignItems: 'baseline', marginBottom: i < 2 ? '0.5rem' : 0 }}>
                     <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '0.95rem' }}>{i + 1}.</span>
                     {text}

@@ -58,14 +58,42 @@ export interface ProfileFrameField {
 }
 
 /**
- * Execution context field definition (for documentation/validation).
+ * Execution context field definition — declared source (value comes from the agent's tool call).
  */
-export interface ExecutionContextFieldDef {
+export interface DeclaredFieldDef {
   source: 'declared';
   description: string;
   required: boolean;
   constraint?: FieldConstraint;
 }
+
+/**
+ * Cumulative window types for stateful limit tracking.
+ */
+export type CumulativeWindow = 'daily' | 'weekly' | 'monthly';
+
+/**
+ * Execution context field definition — cumulative source (resolved from execution log).
+ *
+ * The gatekeeper resolves these by querying the execution log:
+ * - `cumulativeField`: which declared field to sum (use "_count" for plain counting)
+ * - `window`: time window for aggregation (daily, weekly, monthly)
+ *
+ * The resolved value = running total within window + current call value.
+ */
+export interface CumulativeFieldDef {
+  source: 'cumulative';
+  cumulativeField: string;
+  window: CumulativeWindow;
+  description: string;
+  required: boolean;
+  constraint?: FieldConstraint;
+}
+
+/**
+ * Execution context field definition — either declared or cumulative.
+ */
+export type ExecutionContextFieldDef = DeclaredFieldDef | CumulativeFieldDef;
 
 /**
  * Gate question definition.
@@ -145,6 +173,30 @@ export interface ProfileToolGating {
   overrides?: Record<string, ProfileToolGatingEntry | null>;
 }
 
+// ─── Execution Log Types ─────────────────────────────────────────────────────
+
+/**
+ * A recorded execution — stored after gatekeeper approval for cumulative tracking.
+ */
+export interface ExecutionLogEntry {
+  profileId: string;
+  path: string;
+  execution: Record<string, string | number>;
+  timestamp: number; // Unix seconds
+}
+
+/**
+ * Interface for querying cumulative execution data.
+ * Implementations live in the MCP server layer (not hap-core).
+ */
+export interface ExecutionLogQuery {
+  /**
+   * Sum a field's values within a time window for a given profile.
+   * Use field="_count" to count executions instead of summing a field.
+   */
+  sumByWindow(profileId: string, path: string, field: string, window: CumulativeWindow, now?: number): number;
+}
+
 // ─── Frame Types ─────────────────────────────────────────────────────────────
 
 /**
@@ -171,7 +223,7 @@ export interface GatekeeperRequest {
  * Structured error from Gatekeeper verification.
  */
 export interface GatekeeperError {
-  code: 'BOUND_EXCEEDED' | 'INVALID_SIGNATURE' | 'TTL_EXPIRED' | 'FRAME_MISMATCH' | 'DOMAIN_NOT_COVERED' | 'INVALID_PROFILE' | 'MALFORMED_ATTESTATION';
+  code: 'BOUND_EXCEEDED' | 'CUMULATIVE_LIMIT_EXCEEDED' | 'INVALID_SIGNATURE' | 'TTL_EXPIRED' | 'FRAME_MISMATCH' | 'DOMAIN_NOT_COVERED' | 'INVALID_PROFILE' | 'MALFORMED_ATTESTATION';
   field?: string;
   message: string;
   bound?: string | number;

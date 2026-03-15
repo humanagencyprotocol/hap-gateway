@@ -75,6 +75,14 @@ export function createGatedToolHandler(
       const { result } = await state.gatekeeper.verifyExecution(auth.path, execution);
 
       if (result.approved) {
+        // Record execution in log for cumulative tracking
+        state.executionLog.record({
+          profileId: auth.profileId,
+          path: auth.path,
+          execution: { ...execution },
+          timestamp: Math.floor(Date.now() / 1000),
+        });
+
         // Authorization verified — proxy the call
         return integrationManager.callTool(tool.integrationId, tool.originalName, args);
       }

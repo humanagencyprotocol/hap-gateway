@@ -18,6 +18,8 @@ import type {
   GatekeeperError,
   AgentProfile,
   AttestationPayload,
+  ExecutionLogQuery,
+  CumulativeFieldDef,
 } from './types';
 
 /**
@@ -26,11 +28,13 @@ import type {
  * @param request - The frame, attestations, and execution values
  * @param publicKeyHex - The SP's public key in hex (cached locally by MCP server)
  * @param now - Current timestamp in seconds (for testing)
+ * @param executionLog - Optional execution log for resolving cumulative fields
  */
 export async function verify(
   request: GatekeeperRequest,
   publicKeyHex: string,
-  now: number = Math.floor(Date.now() / 1000)
+  now: number = Math.floor(Date.now() / 1000),
+  executionLog?: ExecutionLogQuery,
 ): Promise<GatekeeperResult> {
   const errors: GatekeeperError[] = [];
 
@@ -118,7 +122,15 @@ export async function verify(
     return { approved: false, errors };
   }
 
-  // 4. Check bounds — for each constrained field in the frame schema
+  // 4. Resolve cumulative fields from execution log (if present)
+  if (executionLog && profile.executionContextSchema?.fields) {
+    const cumulativeErrors = resolveCumulativeFields(request, profile, executionLog, now);
+    if (cumulativeErrors.length > 0) {
+      return { approved: false, errors: cumulativeErrors };
+    }
+  }
+
+  // 5. Check bounds — for each constrained field in the frame schema
   const boundsErrors = checkBounds(request, profile);
   if (boundsErrors.length > 0) {
     return { approved: false, errors: boundsErrors };
@@ -196,6 +208,79 @@ function checkBounds(request: GatekeeperRequest, profile: AgentProfile): Gatekee
           });
         }
       }
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * Resolve cumulative fields by querying the execution log, then check their bounds.
+ *
+ * For each cumulative field in the execution context schema:
+ * 1. Query the execution log for the running total within the window
+ * 2. Add the current call's contribution (field value or +1 for _count)
+ * 3. Inject the resolved value into request.execution
+ * 4. Check against the corresponding frame bound (fieldName + "_max")
+ */
+function resolveCumulativeFields(
+  request: GatekeeperRequest,
+  profile: AgentProfile,
+  executionLog: ExecutionLogQuery,
+  now: number,
+): GatekeeperError[] {
+  const errors: GatekeeperError[] = [];
+  const profileId = String(request.frame.profile);
+  const path = String(request.frame.path);
+
+  for (const [fieldName, fieldDef] of Object.entries(profile.executionContextSchema.fields)) {
+    if (fieldDef.source !== 'cumulative') continue;
+
+    const cumDef = fieldDef as CumulativeFieldDef;
+    const { cumulativeField, window: windowType } = cumDef;
+
+    // Query running total from execution log
+    const runningTotal = executionLog.sumByWindow(profileId, path, cumulativeField, windowType, now);
+
+    // Add current call's contribution
+    let currentContribution: number;
+    if (cumulativeField === '_count') {
+      currentContribution = 1;
+    } else {
+      const val = request.execution[cumulativeField];
+      currentContribution = typeof val === 'number' ? val : (val !== undefined ? Number(val) : 0);
+    }
+
+    const cumulativeValue = runningTotal + currentContribution;
+
+    // Inject resolved value into execution for downstream inspection
+    request.execution[fieldName] = cumulativeValue;
+
+    // Check against frame bound — convention: cumulative field "X_daily" maps to frame "X_daily_max"
+    const boundFieldName = fieldName + '_max';
+    const boundValue = request.frame[boundFieldName];
+
+    if (boundValue === undefined) continue; // No bound defined for this cumulative field
+
+    if (typeof boundValue !== 'number') {
+      errors.push({
+        code: 'CUMULATIVE_LIMIT_EXCEEDED',
+        field: fieldName,
+        message: `Cumulative bound requires numeric value for "${boundFieldName}"`,
+        bound: boundValue,
+        actual: cumulativeValue,
+      });
+      continue;
+    }
+
+    if (cumulativeValue > boundValue) {
+      errors.push({
+        code: 'CUMULATIVE_LIMIT_EXCEEDED',
+        field: fieldName,
+        message: `Cumulative ${windowType} value ${cumulativeValue} exceeds limit of ${boundValue}`,
+        bound: boundValue,
+        actual: cumulativeValue,
+      });
     }
   }
 

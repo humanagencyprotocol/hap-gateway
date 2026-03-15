@@ -678,7 +678,7 @@ export function SettingsServicesPage() {
                 <h3 className="card-title">Stripe Integration</h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
                   Connect Stripe to let agents create invoices, payment links, and manage billing.
-                  Financial operations are gated through HAP payment-gate authorization.
+                  Financial operations are gated through HAP spend authorization.
                 </p>
 
                 {/* API Key */}
@@ -743,7 +743,7 @@ export function SettingsServicesPage() {
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                   Read-only Stripe tools (list invoices, search customers, etc.) are <strong>ungated</strong> and
                   available to the agent immediately. Write-financial tools (create invoice, create payment link,
-                  finalize invoice, create refund) require an active <strong>payment-gate</strong> authorization.
+                  finalize invoice, create refund) require an active <strong>spend</strong> authorization.
                 </p>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '0.5rem' }}>
                   Stripe amounts are in cents. The gateway automatically converts to units before checking

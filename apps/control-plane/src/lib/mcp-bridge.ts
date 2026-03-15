@@ -93,7 +93,7 @@ export async function addStripePreset(): Promise<unknown> {
     command: 'npx',
     args: ['-y', '@stripe/mcp@latest'],
     envKeys: { STRIPE_SECRET_KEY: 'stripe.apiKey' },
-    profile: 'stripe-gate',
+    profile: 'spend',
     enabled: true,
   });
 }

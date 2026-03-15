@@ -7,32 +7,38 @@
 
 import type { AgentProfile } from '../src/types';
 
-export const PAYMENT_GATE_PROFILE: AgentProfile = {
-  id: 'payment-gate@0.3',
+export const SPEND_PROFILE: AgentProfile = {
+  id: 'spend@0.3',
   version: '0.3',
-  description: 'Payment authorization with bounded amounts',
+  description: 'Financial authority — governs committing company money: charges, refunds, subscriptions, payouts',
 
   frameSchema: {
-    keyOrder: ['profile', 'path', 'amount_max', 'currency', 'target_env'],
+    keyOrder: ['profile', 'path', 'amount_max', 'currency', 'action_type', 'target_env'],
     fields: {
       profile: { type: 'string', required: true },
       path: { type: 'string', required: true },
       amount_max: {
         type: 'number',
         required: true,
-        description: 'Maximum transaction amount',
+        description: 'Maximum monetary amount per transaction in currency units',
         constraint: { type: 'number', enforceable: ['max'] },
       },
       currency: {
         type: 'string',
         required: true,
-        description: 'Permitted currency',
+        description: 'Permitted currency code',
+        constraint: { type: 'string', enforceable: ['enum'] },
+      },
+      action_type: {
+        type: 'string',
+        required: true,
+        description: 'Authorized financial operation (charge, refund, subscribe)',
         constraint: { type: 'string', enforceable: ['enum'] },
       },
       target_env: {
         type: 'string',
         required: true,
-        description: 'Target environment',
+        description: 'Target environment (production or sandbox)',
         constraint: { type: 'string', enforceable: ['enum'] },
       },
     },
@@ -40,15 +46,21 @@ export const PAYMENT_GATE_PROFILE: AgentProfile = {
 
   executionContextSchema: {
     fields: {
+      action_type: {
+        source: 'declared',
+        description: 'Financial operation being performed',
+        required: true,
+        constraint: { type: 'string', enforceable: ['enum'] },
+      },
       amount: {
         source: 'declared',
-        description: 'Maximum transaction amount',
+        description: 'Monetary amount in currency units',
         required: true,
         constraint: { type: 'number', enforceable: ['max'] },
       },
       currency: {
         source: 'declared',
-        description: 'Permitted currency',
+        description: 'Currency code',
         required: true,
         constraint: { type: 'string', enforceable: ['enum'] },
       },
@@ -62,12 +74,12 @@ export const PAYMENT_GATE_PROFILE: AgentProfile = {
   },
 
   executionPaths: {
-    'payment-routine': {
-      description: 'Routine payments within authorized bounds',
+    'spend-routine': {
+      description: 'Day-to-day financial transactions within authorized bounds',
       requiredDomains: ['finance'],
     },
-    'payment-large': {
-      description: 'Large payments requiring dual authorization',
+    'spend-reviewed': {
+      description: 'Large or unusual transactions requiring dual authorization',
       requiredDomains: ['finance', 'compliance'],
       ttl: { default: 14400, max: 86400 },
     },
@@ -76,35 +88,47 @@ export const PAYMENT_GATE_PROFILE: AgentProfile = {
   requiredGates: ['frame', 'problem', 'objective', 'tradeoff', 'commitment', 'decision_owner'],
 
   gateQuestions: {
-    problem: { question: 'What problem does this agent authority address?', required: true },
-    objective: { question: 'What outcome should this authority enable?', required: true },
-    tradeoffs: { question: 'What risks do you accept with this authority?', required: true },
+    problem: { question: 'What problem does this financial authority address?', required: true },
+    objective: { question: 'What outcome should this spending authority enable?', required: true },
+    tradeoffs: { question: 'What financial risks do you accept with this authority?', required: true },
   },
 
-  ttl: { default: 3600, max: 86400 },
+  ttl: { default: 86400, max: 86400 },
   retention_minimum: 7776000,
 };
 
-export const COMMS_SEND_PROFILE: AgentProfile = {
-  id: 'comms-send@0.3',
+export const PUBLISH_PROFILE: AgentProfile = {
+  id: 'publish@0.3',
   version: '0.3',
-  description: 'Email sending with bounded recipients and scope',
+  description: 'External communication authority — governs sending anything externally as the company',
 
   frameSchema: {
-    keyOrder: ['profile', 'path', 'max_recipients', 'channel'],
+    keyOrder: ['profile', 'path', 'channel', 'audience', 'recipient_max', 'target_env'],
     fields: {
       profile: { type: 'string', required: true },
       path: { type: 'string', required: true },
-      max_recipients: {
-        type: 'number',
-        required: true,
-        description: 'Maximum number of recipients per message',
-        constraint: { type: 'number', enforceable: ['max'] },
-      },
       channel: {
         type: 'string',
         required: true,
-        description: 'Permitted communication channel',
+        description: 'Communication channel (email, webhook, notification)',
+        constraint: { type: 'string', enforceable: ['enum'] },
+      },
+      audience: {
+        type: 'string',
+        required: true,
+        description: 'Audience scope (individual, segment, all)',
+        constraint: { type: 'string', enforceable: ['enum'] },
+      },
+      recipient_max: {
+        type: 'number',
+        required: true,
+        description: 'Maximum recipients per send operation',
+        constraint: { type: 'number', enforceable: ['max'] },
+      },
+      target_env: {
+        type: 'string',
+        required: true,
+        description: 'Target environment (production or sandbox)',
         constraint: { type: 'string', enforceable: ['enum'] },
       },
     },
@@ -112,15 +136,27 @@ export const COMMS_SEND_PROFILE: AgentProfile = {
 
   executionContextSchema: {
     fields: {
-      max_recipients: {
+      channel: {
         source: 'declared',
-        description: 'Maximum number of recipients per message',
+        description: 'Communication channel being used',
+        required: true,
+        constraint: { type: 'string', enforceable: ['enum'] },
+      },
+      audience: {
+        source: 'declared',
+        description: 'Audience scope for this send',
+        required: true,
+        constraint: { type: 'string', enforceable: ['enum'] },
+      },
+      recipient_count: {
+        source: 'declared',
+        description: 'Number of recipients in this send',
         required: true,
         constraint: { type: 'number', enforceable: ['max'] },
       },
-      channel: {
+      target_env: {
         source: 'declared',
-        description: 'Permitted communication channel',
+        description: 'Target environment',
         required: true,
         constraint: { type: 'string', enforceable: ['enum'] },
       },
@@ -128,14 +164,14 @@ export const COMMS_SEND_PROFILE: AgentProfile = {
   },
 
   executionPaths: {
-    'send-internal': {
-      description: 'Internal communications only',
-      requiredDomains: ['communications'],
+    'publish-transactional': {
+      description: 'System emails — password resets, receipts, notifications',
+      requiredDomains: ['engineering'],
     },
-    'send-external': {
-      description: 'External communications (requires security review)',
-      requiredDomains: ['communications', 'security'],
-      ttl: { default: 14400, max: 86400 },
+    'publish-marketing': {
+      description: 'Campaigns and announcements to segments',
+      requiredDomains: ['marketing', 'product'],
+      ttl: { default: 7200, max: 86400 },
     },
   },
 
@@ -143,10 +179,10 @@ export const COMMS_SEND_PROFILE: AgentProfile = {
 
   gateQuestions: {
     problem: { question: 'What problem does this communication authority address?', required: true },
-    objective: { question: 'What outcome should this authority enable?', required: true },
-    tradeoffs: { question: 'What risks do you accept with this authority?', required: true },
+    objective: { question: 'What outcome should this communication authority enable?', required: true },
+    tradeoffs: { question: 'What communication risks do you accept with this authority?', required: true },
   },
 
-  ttl: { default: 3600, max: 86400 },
+  ttl: { default: 86400, max: 86400 },
   retention_minimum: 7776000,
 };

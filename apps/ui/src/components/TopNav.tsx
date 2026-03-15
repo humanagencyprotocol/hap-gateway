@@ -15,8 +15,8 @@ export function TopNav() {
     <nav className="top-nav">
       <div className="top-nav-inner">
         <div className="logo-group">
-          <span className="logo">HAP Demo</span>
-          <span className="version-badge">v0.3</span>
+          <span className="logo">HAP</span>
+          <span className="version-badge">Alpha</span>
         </div>
         <div className="nav-spacer" />
         <div className="nav-actions">

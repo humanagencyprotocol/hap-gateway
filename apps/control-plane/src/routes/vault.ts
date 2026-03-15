@@ -12,14 +12,13 @@ import { pushServiceCredentials } from '../lib/mcp-bridge';
 // Built-in services that appear by default
 const BUILTIN_SERVICES: ServiceDef[] = [
   {
-    id: 'payment-gateway',
-    name: 'Payment Gateway',
-    description: 'Process payments and manage transactions',
+    id: 'stripe',
+    name: 'Stripe',
+    description: 'Payments, invoices, and billing via Stripe MCP',
     icon: '\u{1F4B3}',
-    tools: ['process_payment', 'check_balance', 'refund'],
-    profile: 'payment-gate',
+    tools: ['create_invoice_item', 'create_payment_link', 'create_refund'],
+    profile: 'spend',
     credFields: [
-      { label: 'API Endpoint', key: 'endpoint', type: 'text', placeholder: 'https://api.gateway.example.com' },
       { label: 'API Key', key: 'apiKey', type: 'password', placeholder: 'sk_live_...' },
       { label: 'Webhook Secret', key: 'webhookSecret', type: 'password', placeholder: 'whsec_...' },
     ],
@@ -30,7 +29,7 @@ const BUILTIN_SERVICES: ServiceDef[] = [
     description: 'Send and manage email communications',
     icon: '\u2709',
     tools: ['send_email', 'list_templates'],
-    profile: 'comms-send',
+    profile: 'publish',
     credFields: [
       { label: 'SMTP Host', key: 'host', type: 'text', placeholder: 'smtp.example.com' },
       { label: 'API Key', key: 'apiKey', type: 'password', placeholder: 'SG.xxx' },

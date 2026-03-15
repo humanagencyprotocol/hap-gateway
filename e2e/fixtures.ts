@@ -17,9 +17,11 @@ export const BOB = {
 } as const;
 
 export const PROFILE_IDS = [
-  'github.com/humanagencyprotocol/hap-profiles/deploy-gate@0.3',
-  'github.com/humanagencyprotocol/hap-profiles/payment-gate@0.3',
-  'github.com/humanagencyprotocol/hap-profiles/comms-send@0.3',
+  'github.com/humanagencyprotocol/hap-profiles/spend@0.3',
+  'github.com/humanagencyprotocol/hap-profiles/ship@0.3',
+  'github.com/humanagencyprotocol/hap-profiles/data@0.3',
+  'github.com/humanagencyprotocol/hap-profiles/publish@0.3',
+  'github.com/humanagencyprotocol/hap-profiles/provision@0.3',
 ] as const;
 
 // ─── Login helper ────────────────────────────────────────────────────────

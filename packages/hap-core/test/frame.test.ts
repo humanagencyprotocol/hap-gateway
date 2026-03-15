@@ -1,133 +1,143 @@
 import { describe, it, expect } from 'vitest';
 import { canonicalFrame, computeFrameHash, validateFrameParams } from '../src/frame';
-import { PAYMENT_GATE_PROFILE, COMMS_SEND_PROFILE } from './fixtures';
+import { SPEND_PROFILE, PUBLISH_PROFILE } from './fixtures';
 
 describe('frame', () => {
   describe('canonicalFrame', () => {
     it('produces canonical string with correct key order', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 80,
         currency: 'EUR',
+        action_type: 'charge',
         target_env: 'production',
       };
 
-      const result = canonicalFrame(frame, PAYMENT_GATE_PROFILE);
+      const result = canonicalFrame(frame, SPEND_PROFILE);
       expect(result).toBe(
-        'profile=payment-gate@0.3\npath=payment-routine\namount_max=80\ncurrency=EUR\ntarget_env=production'
+        'profile=spend@0.3\npath=spend-routine\namount_max=80\ncurrency=EUR\naction_type=charge\ntarget_env=production'
       );
     });
 
     it('converts numbers to strings in canonical form', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 100.5,
         currency: 'USD',
+        action_type: 'charge',
         target_env: 'staging',
       };
 
-      const result = canonicalFrame(frame, PAYMENT_GATE_PROFILE);
+      const result = canonicalFrame(frame, SPEND_PROFILE);
       expect(result).toContain('amount_max=100.5');
     });
 
-    it('works with comms-send profile', () => {
+    it('works with publish profile', () => {
       const frame = {
-        profile: 'comms-send@0.3',
-        path: 'send-internal',
-        max_recipients: 5,
+        profile: 'publish@0.3',
+        path: 'publish-transactional',
         channel: 'email',
+        audience: 'individual',
+        recipient_max: 5,
+        target_env: 'production',
       };
 
-      const result = canonicalFrame(frame, COMMS_SEND_PROFILE);
+      const result = canonicalFrame(frame, PUBLISH_PROFILE);
       expect(result).toBe(
-        'profile=comms-send@0.3\npath=send-internal\nmax_recipients=5\nchannel=email'
+        'profile=publish@0.3\npath=publish-transactional\nchannel=email\naudience=individual\nrecipient_max=5\ntarget_env=production'
       );
     });
 
     it('throws on missing required field', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
-        // missing amount_max, currency, target_env
+        profile: 'spend@0.3',
+        path: 'spend-routine',
+        // missing amount_max, currency, action_type, target_env
       };
 
-      expect(() => canonicalFrame(frame, PAYMENT_GATE_PROFILE)).toThrow('Missing required field');
+      expect(() => canonicalFrame(frame, SPEND_PROFILE)).toThrow('Missing required field');
     });
 
     it('throws on unknown field', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 80,
         currency: 'EUR',
+        action_type: 'charge',
         target_env: 'production',
         unknown_field: 'value',
       };
 
-      expect(() => canonicalFrame(frame, PAYMENT_GATE_PROFILE)).toThrow('Unknown field');
+      expect(() => canonicalFrame(frame, SPEND_PROFILE)).toThrow('Unknown field');
     });
 
     it('throws on wrong type (string where number expected)', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 'eighty' as unknown as number,
         currency: 'EUR',
+        action_type: 'charge',
         target_env: 'production',
       };
 
-      expect(() => canonicalFrame(frame, PAYMENT_GATE_PROFILE)).toThrow('must be a number');
+      expect(() => canonicalFrame(frame, SPEND_PROFILE)).toThrow('must be a number');
     });
   });
 
   describe('computeFrameHash', () => {
     it('returns sha256: prefixed hash', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 80,
         currency: 'EUR',
+        action_type: 'charge',
         target_env: 'production',
       };
 
-      const hash = computeFrameHash(frame, PAYMENT_GATE_PROFILE);
+      const hash = computeFrameHash(frame, SPEND_PROFILE);
       expect(hash).toMatch(/^sha256:[a-f0-9]{64}$/);
     });
 
     it('produces same hash for same inputs', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 80,
         currency: 'EUR',
+        action_type: 'charge',
         target_env: 'production',
       };
 
-      const hash1 = computeFrameHash(frame, PAYMENT_GATE_PROFILE);
-      const hash2 = computeFrameHash(frame, PAYMENT_GATE_PROFILE);
+      const hash1 = computeFrameHash(frame, SPEND_PROFILE);
+      const hash2 = computeFrameHash(frame, SPEND_PROFILE);
       expect(hash1).toBe(hash2);
     });
 
     it('produces different hash for different values', () => {
       const frame1 = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 80,
         currency: 'EUR',
+        action_type: 'charge',
         target_env: 'production',
       };
       const frame2 = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 100,
         currency: 'EUR',
+        action_type: 'charge',
         target_env: 'production',
       };
 
-      const hash1 = computeFrameHash(frame1, PAYMENT_GATE_PROFILE);
-      const hash2 = computeFrameHash(frame2, PAYMENT_GATE_PROFILE);
+      const hash1 = computeFrameHash(frame1, SPEND_PROFILE);
+      const hash2 = computeFrameHash(frame2, SPEND_PROFILE);
       expect(hash1).not.toBe(hash2);
     });
   });
@@ -135,27 +145,28 @@ describe('frame', () => {
   describe('validateFrameParams', () => {
     it('validates correct frame params', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profile: 'spend@0.3',
+        path: 'spend-routine',
         amount_max: 80,
         currency: 'EUR',
+        action_type: 'charge',
         target_env: 'production',
       };
 
-      const result = validateFrameParams(frame, PAYMENT_GATE_PROFILE);
+      const result = validateFrameParams(frame, SPEND_PROFILE);
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
 
     it('reports multiple errors at once', () => {
       const frame = {
-        profile: 'payment-gate@0.3',
-        // missing path, amount_max, currency, target_env
+        profile: 'spend@0.3',
+        // missing path, amount_max, currency, action_type, target_env
       };
 
-      const result = validateFrameParams(frame, PAYMENT_GATE_PROFILE);
+      const result = validateFrameParams(frame, SPEND_PROFILE);
       expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThanOrEqual(4);
+      expect(result.errors.length).toBeGreaterThanOrEqual(5);
     });
   });
 });

@@ -5,6 +5,15 @@
 
 import type { EnrichedAuthorization } from './shared-state';
 
+/** Map profile short names to human-readable tool descriptions. */
+const PROFILE_TOOL_HINTS: Record<string, string> = {
+  spend: 'financial tools (payments, invoices, refunds)',
+  publish: 'communication tools (email, notifications)',
+  ship: 'deployment tools (releases, rollbacks)',
+  data: 'data tools (queries, exports)',
+  provision: 'infrastructure tools (resources, configs)',
+};
+
 /**
  * Build the mandate brief text from enriched authorizations.
  * Returns null if there are no active authorizations.
@@ -59,17 +68,20 @@ export function buildMandateBrief(authorizations: EnrichedAuthorization[]): stri
     lines.push('');
   }
 
-  // Tool guidance
-  const hasPayment = active.some(a => a.profileId.startsWith('payment-gate'));
-  const hasComms = active.some(a => a.profileId.startsWith('comms-send'));
-
+  // Tool guidance — dynamic based on active profile short names
   const toolHints: string[] = [];
-  if (hasPayment) toolHints.push('"make-payment" for payment actions');
-  if (hasComms) toolHints.push('"send-email" for communication actions');
+  for (const auth of active) {
+    // Extract short name from profile ID (e.g., "spend@0.3" → "spend")
+    const shortName = auth.profileId.replace(/@.*$/, '');
+    const hint = PROFILE_TOOL_HINTS[shortName];
+    if (hint && !toolHints.includes(hint)) {
+      toolHints.push(hint);
+    }
+  }
 
   lines.push('=== TOOLS ===');
   if (toolHints.length > 0) {
-    lines.push(`Use ${toolHints.join(', ')}. Call "list-authorizations" to refresh.`);
+    lines.push(`Available: ${toolHints.join(', ')}. Call "list-authorizations" to refresh.`);
   } else if (active.length === 0) {
     lines.push('No active authorities. Call "list-authorizations" to check for updates.');
   }

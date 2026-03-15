@@ -46,7 +46,7 @@ export function loadProfiles(profilesDir?: string): number {
       const profile: AgentProfile = JSON.parse(readFileSync(profilePath, 'utf-8'));
       registerProfile(profileId, profile);
 
-      // Also register by short name (e.g., "stripe-gate") for easier lookup
+      // Also register by short name (e.g., "spend") for easier lookup
       const shortName = profileId.split('/').pop()?.replace(/@.*$/, '');
       if (shortName && shortName !== profileId) {
         registerProfile(shortName, profile);

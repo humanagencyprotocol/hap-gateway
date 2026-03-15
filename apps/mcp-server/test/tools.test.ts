@@ -50,13 +50,14 @@ describe('list-authorizations', () => {
     const handler = listAuthorizationsHandler(mockState([
       {
         frameHash: 'sha256:abc',
-        profileId: 'payment-gate@0.3',
-        path: 'payment-routine',
+        profileId: 'spend@0.3',
+        path: 'spend-routine',
         frame: {
-          profile: 'payment-gate@0.3',
-          path: 'payment-routine',
+          profile: 'spend@0.3',
+          path: 'spend-routine',
           amount_max: 80,
           currency: 'EUR',
+          action_type: 'charge',
           target_env: 'production',
         },
         attestations: [{ domain: 'finance', blob: 'blob', expiresAt: now + 2700 }],
@@ -69,7 +70,7 @@ describe('list-authorizations', () => {
     const result = await handler();
     const text = result.content[0].text;
     expect(text).toContain('Active authorizations');
-    expect(text).toContain('payment-routine');
+    expect(text).toContain('spend-routine');
     expect(text).toContain('amount_max: 80');
     expect(text).toContain('currency: EUR');
   });
@@ -79,13 +80,14 @@ describe('list-authorizations', () => {
     const handler = listAuthorizationsHandler(mockState([
       {
         frameHash: 'sha256:abc',
-        profileId: 'payment-gate@0.3',
-        path: 'payment-large',
+        profileId: 'spend@0.3',
+        path: 'spend-reviewed',
         frame: {
-          profile: 'payment-gate@0.3',
-          path: 'payment-large',
+          profile: 'spend@0.3',
+          path: 'spend-reviewed',
           amount_max: 5000,
           currency: 'EUR',
+          action_type: 'charge',
           target_env: 'production',
         },
         attestations: [{ domain: 'finance', blob: 'blob', expiresAt: now + 3600 }],

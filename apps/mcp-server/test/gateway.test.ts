@@ -54,16 +54,16 @@ async function del(path: string) {
 
 describe('MCP Gateway', () => {
   beforeAll(async () => {
-    // Create test profiles directory with a payment-gate profile
-    mkdirSync(resolve(TEST_PROFILES_DIR, 'payment-gate'), { recursive: true });
+    // Create test profiles directory with a spend profile
+    mkdirSync(resolve(TEST_PROFILES_DIR, 'spend'), { recursive: true });
     writeFileSync(resolve(TEST_PROFILES_DIR, 'index.json'), JSON.stringify({
       repository: 'test',
       profiles: {
-        'payment-gate': 'payment-gate/0.3.profile.json',
+        'spend': 'spend/0.3.profile.json',
       },
     }));
-    writeFileSync(resolve(TEST_PROFILES_DIR, 'payment-gate/0.3.profile.json'), JSON.stringify({
-      id: 'payment-gate',
+    writeFileSync(resolve(TEST_PROFILES_DIR, 'spend/0.3.profile.json'), JSON.stringify({
+      id: 'spend',
       version: '0.3',
       description: 'Test payment profile',
       frameSchema: { keyOrder: [], fields: {} },
@@ -255,7 +255,7 @@ describe('MCP Gateway', () => {
       command: 'npx',
       args: ['tsx', TEST_SERVER_PATH],
       envKeys: {},
-      profile: 'payment-gate',
+      profile: 'spend',
       enabled: true,
     });
 

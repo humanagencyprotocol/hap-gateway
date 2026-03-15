@@ -46,8 +46,7 @@ export async function createTestAttestation(opts: {
     profile_id: opts.profile.id,
     frame_hash: frameHashValue,
     execution_context_hash: 'sha256:test-context',
-    domain: opts.domain,
-    did: opts.did ?? 'did:key:test',
+    resolved_domains: [{ domain: opts.domain, did: opts.did ?? 'did:key:test' }],
     gate_content_hashes: {
       problem: 'sha256:test-problem',
       objective: 'sha256:test-objective',

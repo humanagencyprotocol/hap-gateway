@@ -1,12 +1,15 @@
 /**
- * MCP Gatekeeper Wrapper — integrates hap-core Gatekeeper with attestation cache.
+ * MCP Gatekeeper Wrapper — integrates hap-core Gatekeeper with attestation cache and execution log.
  */
 
-import { verify, type GatekeeperRequest, type GatekeeperResult } from '@hap/core';
+import { verify, type GatekeeperRequest, type GatekeeperResult, type ExecutionLogQuery } from '@hap/core';
 import { AttestationCache, type CachedAuthorization } from './attestation-cache';
 
 export class MCPGatekeeper {
-  constructor(private cache: AttestationCache) {}
+  constructor(
+    private cache: AttestationCache,
+    private executionLog?: ExecutionLogQuery,
+  ) {}
 
   /**
    * Verify an execution request against a cached authorization.
@@ -62,7 +65,7 @@ export class MCPGatekeeper {
       execution,
     };
 
-    const result = await verify(request, publicKeyHex);
+    const result = await verify(request, publicKeyHex, undefined, this.executionLog);
     return { result, authorization: auth };
   }
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { verify } from '../src/gatekeeper';
 import { registerProfile } from '../src/profiles';
-import { PAYMENT_GATE_PROFILE } from './fixtures';
+import { SPEND_PROFILE } from './fixtures';
 import { generateTestKeyPair, createTestAttestation, type TestKeyPair } from './helpers';
 import type { AgentFrameParams } from '../src/types';
 
@@ -10,23 +10,25 @@ describe('gatekeeper', () => {
   let wrongKeyPair: TestKeyPair;
 
   const routineFrame: AgentFrameParams = {
-    profile: 'payment-gate@0.3',
-    path: 'payment-routine',
+    profile: 'spend@0.3',
+    path: 'spend-routine',
     amount_max: 80,
     currency: 'EUR',
+    action_type: 'charge',
     target_env: 'production',
   };
 
-  const largeFrame: AgentFrameParams = {
-    profile: 'payment-gate@0.3',
-    path: 'payment-large',
+  const reviewedFrame: AgentFrameParams = {
+    profile: 'spend@0.3',
+    path: 'spend-reviewed',
     amount_max: 5000,
     currency: 'EUR',
+    action_type: 'charge',
     target_env: 'production',
   };
 
   beforeAll(async () => {
-    registerProfile('payment-gate@0.3', PAYMENT_GATE_PROFILE);
+    registerProfile('spend@0.3', SPEND_PROFILE);
     keyPair = await generateTestKeyPair();
     wrongKeyPair = await generateTestKeyPair();
   });
@@ -36,7 +38,7 @@ describe('gatekeeper', () => {
       const blob = await createTestAttestation({
         keyPair,
         frame: routineFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        profile: SPEND_PROFILE,
         domain: 'finance',
       });
 
@@ -44,7 +46,7 @@ describe('gatekeeper', () => {
         {
           frame: routineFrame,
           attestations: [blob],
-          execution: { amount: 5, currency: 'EUR', target_env: 'production' },
+          execution: { amount: 5, currency: 'EUR', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex
       );
@@ -56,7 +58,7 @@ describe('gatekeeper', () => {
       const blob = await createTestAttestation({
         keyPair,
         frame: routineFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        profile: SPEND_PROFILE,
         domain: 'finance',
       });
 
@@ -64,7 +66,7 @@ describe('gatekeeper', () => {
         {
           frame: routineFrame,
           attestations: [blob],
-          execution: { amount: 80, currency: 'EUR', target_env: 'production' },
+          execution: { amount: 80, currency: 'EUR', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex
       );
@@ -78,7 +80,7 @@ describe('gatekeeper', () => {
       const blob = await createTestAttestation({
         keyPair,
         frame: routineFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        profile: SPEND_PROFILE,
         domain: 'finance',
       });
 
@@ -86,7 +88,7 @@ describe('gatekeeper', () => {
         {
           frame: routineFrame,
           attestations: [blob],
-          execution: { amount: 120, currency: 'EUR', target_env: 'production' },
+          execution: { amount: 120, currency: 'EUR', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex
       );
@@ -107,7 +109,7 @@ describe('gatekeeper', () => {
       const blob = await createTestAttestation({
         keyPair,
         frame: routineFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        profile: SPEND_PROFILE,
         domain: 'finance',
       });
 
@@ -115,7 +117,7 @@ describe('gatekeeper', () => {
         {
           frame: routineFrame,
           attestations: [blob],
-          execution: { amount: 5, currency: 'USD', target_env: 'production' },
+          execution: { amount: 5, currency: 'USD', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex
       );
@@ -133,7 +135,7 @@ describe('gatekeeper', () => {
       const blob = await createTestAttestation({
         keyPair,
         frame: routineFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        profile: SPEND_PROFILE,
         domain: 'finance',
         expiresAt: pastExpiry,
       });
@@ -142,7 +144,7 @@ describe('gatekeeper', () => {
         {
           frame: routineFrame,
           attestations: [blob],
-          execution: { amount: 5, currency: 'EUR', target_env: 'production' },
+          execution: { amount: 5, currency: 'EUR', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex
       );
@@ -159,7 +161,7 @@ describe('gatekeeper', () => {
       const blob = await createTestAttestation({
         keyPair: wrongKeyPair,
         frame: routineFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        profile: SPEND_PROFILE,
         domain: 'finance',
       });
 
@@ -167,7 +169,7 @@ describe('gatekeeper', () => {
         {
           frame: routineFrame,
           attestations: [blob],
-          execution: { amount: 5, currency: 'EUR', target_env: 'production' },
+          execution: { amount: 5, currency: 'EUR', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex // verifying with a different key
       );
@@ -181,20 +183,20 @@ describe('gatekeeper', () => {
 
   describe('missing domain → DOMAIN_NOT_COVERED', () => {
     it('rejects when required domain is missing (multi-owner)', async () => {
-      // payment-large requires finance + compliance
+      // spend-reviewed requires finance + compliance
       const financeBlob = await createTestAttestation({
         keyPair,
-        frame: largeFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        frame: reviewedFrame,
+        profile: SPEND_PROFILE,
         domain: 'finance',
       });
 
       // Only finance attested, compliance missing
       const result = await verify(
         {
-          frame: largeFrame,
+          frame: reviewedFrame,
           attestations: [financeBlob],
-          execution: { amount: 2000, currency: 'EUR', target_env: 'production' },
+          execution: { amount: 2000, currency: 'EUR', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex
       );
@@ -208,22 +210,22 @@ describe('gatekeeper', () => {
     it('approves when all domains are covered', async () => {
       const financeBlob = await createTestAttestation({
         keyPair,
-        frame: largeFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        frame: reviewedFrame,
+        profile: SPEND_PROFILE,
         domain: 'finance',
       });
       const complianceBlob = await createTestAttestation({
         keyPair,
-        frame: largeFrame,
-        profile: PAYMENT_GATE_PROFILE,
+        frame: reviewedFrame,
+        profile: SPEND_PROFILE,
         domain: 'compliance',
       });
 
       const result = await verify(
         {
-          frame: largeFrame,
+          frame: reviewedFrame,
           attestations: [financeBlob, complianceBlob],
-          execution: { amount: 2000, currency: 'EUR', target_env: 'production' },
+          execution: { amount: 2000, currency: 'EUR', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex
       );
@@ -254,7 +256,7 @@ describe('gatekeeper', () => {
     it('rejects unknown path', async () => {
       const result = await verify(
         {
-          frame: { profile: 'payment-gate@0.3', path: 'nonexistent-path', amount_max: 80, currency: 'EUR', target_env: 'production' },
+          frame: { profile: 'spend@0.3', path: 'nonexistent-path', amount_max: 80, currency: 'EUR', action_type: 'charge', target_env: 'production' },
           attestations: [],
           execution: {},
         },
@@ -275,7 +277,7 @@ describe('gatekeeper', () => {
         {
           frame: routineFrame,
           attestations: [],
-          execution: { amount: 5, currency: 'EUR', target_env: 'production' },
+          execution: { amount: 5, currency: 'EUR', action_type: 'charge', target_env: 'production' },
         },
         keyPair.publicKeyHex
       );

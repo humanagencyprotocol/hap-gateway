@@ -14,7 +14,7 @@ import type { ExecutionMappingValue } from '@hap/core';
  * How a tool's calls should be gated through HAP authorization.
  * This is the runtime-resolved form used by tool-proxy.ts.
  *
- * - profile: which HAP profile to match against (e.g., "stripe-gate").
+ * - profile: which HAP profile to match against (e.g., "spend").
  *   If null, tool calls are proxied without HAP gating.
  * - executionMapping: maps tool argument names to execution context fields
  *   that the Gatekeeper checks against frame bounds.
@@ -45,7 +45,7 @@ export interface IntegrationConfig {
    * Example: { "STRIPE_API_KEY": "stripe.apiKey" }
    */
   envKeys: Record<string, string>;
-  /** HAP profile ID for tool gating (e.g., "stripe-gate"). Null = ungated. */
+  /** HAP profile ID for tool gating (e.g., "spend"). Null = ungated. */
   profile: string | null;
   /** Whether this integration should be spawned on startup */
   enabled: boolean;
