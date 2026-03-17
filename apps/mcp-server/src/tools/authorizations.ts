@@ -1,14 +1,110 @@
 /**
- * list-authorizations tool — shows what the agent is authorized to do,
- * including gate content (problem/objective/tradeoffs) when available.
+ * list-authorizations tool — Tier 2 of the two-tier context model.
+ *
+ * No argument: compact overview of all active authorities (refreshed).
+ * With domain: full detail for matching authority — bounds, consumption,
+ *   problem/objective/tradeoffs, and capability map.
  */
 
 import type { SharedState } from '../lib/shared-state';
+import type { IntegrationManager } from '../lib/integration-manager';
+import { getProfile } from '@hap/core';
+import type { ProfileToolGating } from '@hap/core';
+import { getConsumptionState, formatConsumptionCompact, formatConsumptionFull } from '../lib/consumption';
+import { readContextFile } from '../lib/context-loader';
+import { profileMatches } from '../lib/tool-proxy';
 
-export function listAuthorizationsHandler(state: SharedState) {
-  return async () => {
+/** Extract short profile name from full ID */
+function shortProfileName(profileId: string): string {
+  const withoutVersion = profileId.replace(/@.*$/, '');
+  const parts = withoutVersion.split('/');
+  return parts[parts.length - 1];
+}
+
+/** Build a capability map for a profile from its toolGating + discovered tools */
+function buildCapabilityMap(
+  profileId: string,
+  toolGating: ProfileToolGating | undefined,
+  integrationManager: IntegrationManager | undefined,
+): string {
+  if (!integrationManager || !toolGating) return '';
+
+  const allTools = integrationManager.getAllTools();
+  const shortName = shortProfileName(profileId);
+
+  const gated: string[] = [];
+  const readOnly: string[] = [];
+  const defaultGated: string[] = [];
+
+  for (const tool of allTools) {
+    if (!tool.gating || !tool.gating.profile) {
+      continue;
+    }
+
+    // Only include tools matching this profile
+    if (!profileMatches(tool.gating.profile, shortName) && tool.gating.profile !== profileId) {
+      continue;
+    }
+
+    const overrides = toolGating.overrides ?? {};
+    const override = overrides[tool.originalName];
+
+    if (override === null) {
+      // Explicitly exempt from gating
+      readOnly.push(tool.originalName);
+    } else if (override !== undefined) {
+      // Has specific override — this is a gated tool
+      const mappingDesc = Object.entries(override.executionMapping)
+        .map(([arg, mapping]) => {
+          if (typeof mapping === 'string') return `${mapping} from ${arg}`;
+          return `${mapping.field} from ${arg} (/${mapping.divisor})`;
+        })
+        .join(', ');
+      const actionType = override.staticExecution?.action_type ?? 'unknown';
+      gated.push(`      - ${tool.originalName}: ${actionType}${mappingDesc ? `, ${mappingDesc}` : ''}`);
+    } else {
+      // Falls through to default gating
+      const defaultAction = toolGating.default.staticExecution?.action_type;
+      if (defaultAction === 'read' && Object.keys(toolGating.default.executionMapping).length === 0) {
+        defaultGated.push(tool.originalName);
+      } else {
+        gated.push(`      - ${tool.originalName}: ${defaultAction ?? 'default'} (default gating)`);
+      }
+    }
+  }
+
+  const lines: string[] = [];
+  lines.push('  Capability Map:');
+
+  if (gated.length > 0) {
+    lines.push('    Gated (checked per call):');
+    lines.push(...gated);
+  }
+
+  if (readOnly.length > 0) {
+    lines.push(`    Read-only (no authorization needed): ${readOnly.join(', ')}`);
+  }
+
+  if (defaultGated.length > 0) {
+    lines.push(`    Default-gated (action_type: ${toolGating.default.staticExecution?.action_type ?? 'read'}): ${defaultGated.join(', ')}`);
+  }
+
+  if (gated.length === 0 && readOnly.length === 0 && defaultGated.length === 0) {
+    lines.push('    No tools discovered for this profile.');
+  }
+
+  return lines.join('\n');
+}
+
+export function listAuthorizationsHandler(
+  state: SharedState,
+  integrationManager?: IntegrationManager,
+  contextDir?: string,
+) {
+  return async (args?: { domain?: string }) => {
     const authorizations = state.getEnrichedAuthorizations();
     const now = Math.floor(Date.now() / 1000);
+    const domain = args?.domain;
 
     if (authorizations.length === 0) {
       return {
@@ -19,8 +115,90 @@ export function listAuthorizationsHandler(state: SharedState) {
       };
     }
 
+    // ── Domain-scoped detail view ──────────────────────────────────────────
+    if (domain) {
+      const matching = authorizations.filter(auth => {
+        const shortName = shortProfileName(auth.profileId);
+        return shortName === domain || profileMatches(auth.profileId, domain);
+      });
+
+      if (matching.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `No authorizations found for domain "${domain}". Active domains: ${
+              [...new Set(authorizations.map(a => shortProfileName(a.profileId)))].join(', ')
+            }`,
+          }],
+        };
+      }
+
+      const output: string[] = [];
+      for (const auth of matching) {
+        const earliestExpiry = Math.min(...auth.attestations.map(a => a.expiresAt));
+        const remainingMin = Math.max(0, Math.round((earliestExpiry - now) / 60));
+
+        const boundsDesc = Object.entries(auth.frame)
+          .filter(([key]) => key !== 'profile' && key !== 'path')
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(', ');
+
+        const statusLabel = auth.complete ? '' : ' (PENDING)';
+        output.push(`[${auth.path}] ${auth.profileId} (${remainingMin} min remaining)${statusLabel}`);
+        output.push('');
+        output.push(`  Bounds: ${boundsDesc}`);
+
+        // Full consumption detail
+        const shortName = shortProfileName(auth.profileId);
+        const profile = getProfile(auth.profileId) ?? getProfile(shortName);
+        if (profile) {
+          const consumption = getConsumptionState(auth, state.executionLog, profile);
+          const consumptionText = formatConsumptionFull(consumption);
+          if (consumptionText) {
+            output.push('');
+            output.push('  Usage:');
+            output.push(consumptionText);
+          }
+        }
+
+        // Gate content
+        if (auth.gateContent) {
+          output.push('');
+          output.push(`  Problem: ${auth.gateContent.problem}`);
+          output.push(`  Objective: ${auth.gateContent.objective}`);
+          output.push(`  Tradeoffs: ${auth.gateContent.tradeoffs}`);
+        }
+
+        // Pending domain info
+        if (!auth.complete) {
+          const missing = auth.requiredDomains.filter(d => !auth.attestedDomains.includes(d));
+          output.push('');
+          output.push(`  Missing attestations: ${missing.join(', ')}`);
+        }
+
+        // Capability map
+        if (profile && integrationManager) {
+          output.push('');
+          output.push(buildCapabilityMap(auth.profileId, profile.toolGating, integrationManager));
+        }
+
+        output.push('');
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: output.join('\n'),
+        }],
+      };
+    }
+
+    // ── Compact overview (no domain) ───────────────────────────────────────
     const active: string[] = [];
     const pending: string[] = [];
+
+    // Include context if available
+    const context = readContextFile(contextDir);
 
     for (const auth of authorizations) {
       const earliestExpiry = Math.min(...auth.attestations.map(a => a.expiresAt));
@@ -32,14 +210,21 @@ export function listAuthorizationsHandler(state: SharedState) {
         .join(', ');
 
       if (auth.complete) {
-        const lines = [`  ${auth.path}: ${boundsDesc}, ${remainingMin} min remaining`];
+        const lines = [`  [${auth.path}] ${auth.profileId} — ${remainingMin} min remaining`];
+        lines.push(`    Bounds: ${boundsDesc}`);
 
-        if (auth.gateContent) {
-          lines.push(`    Problem: ${auth.gateContent.problem}`);
-          lines.push(`    Objective: ${auth.gateContent.objective}`);
-          lines.push(`    Tradeoffs: ${auth.gateContent.tradeoffs}`);
+        // Compact consumption
+        const shortName = shortProfileName(auth.profileId);
+        const profile = getProfile(auth.profileId) ?? getProfile(shortName);
+        if (profile) {
+          const consumption = getConsumptionState(auth, state.executionLog, profile);
+          const compact = formatConsumptionCompact(consumption);
+          if (compact) {
+            lines.push(`    Usage: ${compact}`);
+          }
         }
 
+        lines.push(`    Call list-authorizations(domain: "${shortProfileName(auth.profileId)}") for full details`);
         active.push(lines.join('\n'));
       } else {
         const missing = auth.requiredDomains.filter(d => !auth.attestedDomains.includes(d));
@@ -50,6 +235,13 @@ export function listAuthorizationsHandler(state: SharedState) {
     }
 
     const output: string[] = [];
+
+    if (context) {
+      output.push('=== CONTEXT ===');
+      output.push(context);
+      output.push('');
+    }
+
     if (active.length > 0) {
       output.push('Active authorizations:');
       output.push(...active);

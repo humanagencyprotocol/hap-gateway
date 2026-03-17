@@ -80,7 +80,11 @@ export function createMcpServer(
 
   // Build mandate brief from current enriched authorizations
   const enriched = state.getEnrichedAuthorizations();
-  const instructions = buildMandateBrief(enriched);
+  const instructions = buildMandateBrief({
+    authorizations: enriched,
+    executionLog: state.executionLog,
+    integrationManager,
+  });
 
   const server = new McpServer(
     { name: 'hap-agent', version: '0.1.0' },
@@ -92,9 +96,12 @@ export function createMcpServer(
   server.registerTool(
     'list-authorizations',
     {
-      description: 'List what you are currently authorized to do. Shows active and pending attestations with bounds, intent, and remaining TTL. Call this to refresh your understanding of available authorities.',
+      description: 'List what you are currently authorized to do. Call with no arguments for a compact overview, or with a domain (e.g., "spend") for full details including consumption, bounds, and capability map.',
+      inputSchema: {
+        domain: z.string().optional().describe('Profile domain to show full details for (e.g., "spend", "ship"). Omit for compact overview.'),
+      },
     },
-    listAuthorizationsHandler(state)
+    listAuthorizationsHandler(state, integrationManager)
   );
 
   // ─── check-pending-attestations ──────────────────────────────────────────

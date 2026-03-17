@@ -141,51 +141,43 @@ export function createGatedToolHandler(
 }
 
 /**
- * Build a description for a proxied tool that includes authorization context.
+ * Build a description for a proxied tool that includes a short gating tag.
+ *
+ * Tags:
+ * - [HAP: ungated] — no authorization needed
+ * - [HAP: spend — charge, amount checked] — gated with specific checks
+ * - [HAP: spend — no active authorization] — gated but no auth available
  */
 export function buildProxiedToolDescription(
   tool: DiscoveredTool,
   state: SharedState,
 ): string {
-  const lines = [tool.description];
-
   if (!tool.gating || !tool.gating.profile) {
-    return tool.description;
+    return `[HAP: ungated] ${tool.description}`;
   }
 
+  const profile = tool.gating.profile;
   const auths = state.getEnrichedAuthorizations();
-  const matching = auths.filter(
-    a => a.complete && profileMatches(a.profileId, tool.gating!.profile!),
-  );
-  const pending = auths.filter(
-    a => !a.complete && profileMatches(a.profileId, tool.gating!.profile!),
+  const hasAuth = auths.some(
+    a => a.complete && profileMatches(a.profileId, profile),
   );
 
-  if (matching.length > 0) {
-    lines.push('Active authorizations:');
-    for (const auth of matching) {
-      const now = Math.floor(Date.now() / 1000);
-      const earliestExpiry = Math.min(...auth.attestations.map(a => a.expiresAt));
-      const remainingMin = Math.max(0, Math.round((earliestExpiry - now) / 60));
-      const bounds = Object.entries(auth.frame)
-        .filter(([key]) => key !== 'profile' && key !== 'path')
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ');
-
-      let desc = `  - ${auth.path}: ${bounds} (${remainingMin} min remaining)`;
-      if (auth.gateContent) {
-        desc += `\n    Purpose: ${auth.gateContent.objective}`;
-      }
-      lines.push(desc);
-    }
-  } else {
-    lines.push(`No active authorizations for profile "${tool.gating.profile}".`);
+  if (!hasAuth) {
+    return `[HAP: ${profile} — no active authorization] ${tool.description}`;
   }
 
-  for (const auth of pending) {
-    const missing = auth.requiredDomains.filter(d => !auth.attestedDomains.includes(d));
-    lines.push(`  - ${auth.path}: pending (needs ${missing.join(', ')})`);
+  // Build a short tag describing what's checked
+  const parts: string[] = [];
+  if (tool.gating.staticExecution?.action_type) {
+    parts.push(String(tool.gating.staticExecution.action_type));
+  }
+  const mappedFields = Object.values(tool.gating.executionMapping).map(m =>
+    typeof m === 'string' ? m : m.field,
+  );
+  if (mappedFields.length > 0) {
+    parts.push(`${mappedFields.join(', ')} checked`);
   }
 
-  return lines.join('\n');
+  const tag = parts.length > 0 ? parts.join(', ') : 'gated';
+  return `[HAP: ${profile} — ${tag}] ${tool.description}`;
 }

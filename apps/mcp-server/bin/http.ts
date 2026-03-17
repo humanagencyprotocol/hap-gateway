@@ -201,6 +201,39 @@ app.post('/internal/service-credentials', internalOnly, (req: Request, res: Resp
   res.json({ ok: true });
 });
 
+app.post('/internal/resync-gates', internalOnly, async (_req: Request, res: Response) => {
+  const gates = state.gateStore.getAll();
+  if (gates.length === 0) {
+    res.json({ ok: true, synced: 0 });
+    return;
+  }
+
+  let synced = 0;
+  for (const gate of gates) {
+    try {
+      const auth = await state.cache.syncAuthorization(gate.frameHash);
+      if (auth) {
+        state.setGateContent(gate.path, gate.frameHash, auth.profileId, gate.gateContent);
+        synced++;
+        console.error(`[HAP MCP] Re-synced gate: ${gate.path}`);
+      }
+    } catch (err) {
+      console.error(`[HAP MCP] Failed to re-sync gate ${gate.path}:`, err);
+    }
+  }
+
+  // Refresh tools on all active MCP sessions
+  for (const [sessionId, session] of activeSessions) {
+    try {
+      session.refreshTools();
+    } catch (err) {
+      console.error(`[HAP MCP] Failed to refresh session ${sessionId}:`, err);
+    }
+  }
+
+  res.json({ ok: true, synced });
+});
+
 // ─── Integration management endpoints ──────────────────────────────────────
 
 app.post('/internal/add-integration', internalOnly, async (req: Request, res: Response) => {

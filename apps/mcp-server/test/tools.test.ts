@@ -1,13 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 import { listAuthorizationsHandler } from '../src/tools/authorizations';
 import { checkPendingHandler } from '../src/tools/pending';
-import { createGatedToolHandler } from '../src/lib/tool-proxy';
+import { createGatedToolHandler, buildProxiedToolDescription } from '../src/lib/tool-proxy';
 import { SPReceiptError } from '../src/lib/sp-client';
 import type { AttestationCache, CachedAuthorization } from '../src/lib/attestation-cache';
 import type { SharedState, EnrichedAuthorization } from '../src/lib/shared-state';
 import type { IntegrationManager, DiscoveredTool } from '../src/lib/integration-manager';
 
 // ─── Mock factories ──────────────────────────────────────────────────────────
+
+function mockExecutionLog() {
+  return {
+    record: vi.fn(),
+    sumByWindow: vi.fn().mockReturnValue(0),
+    getAll: () => [],
+    size: 0,
+  };
+}
 
 function mockState(authorizations: CachedAuthorization[] = []): SharedState {
   const enriched: EnrichedAuthorization[] = authorizations.map(a => ({
@@ -17,6 +26,7 @@ function mockState(authorizations: CachedAuthorization[] = []): SharedState {
 
   return {
     getEnrichedAuthorizations: () => enriched,
+    executionLog: mockExecutionLog(),
     cache: {
       getAllAuthorizations: () => authorizations,
       getAuthorization: (path: string) => authorizations.find(a => a.path === path) ?? null,
@@ -102,6 +112,79 @@ describe('list-authorizations', () => {
     const text = result.content[0].text;
     expect(text).toContain('Pending');
     expect(text).toContain('compliance');
+  });
+
+  it('returns domain-scoped detail when domain param is provided', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const handler = listAuthorizationsHandler(mockState([
+      {
+        frameHash: 'sha256:abc',
+        profileId: 'spend@0.3',
+        path: 'spend-routine',
+        frame: {
+          profile: 'spend@0.3',
+          path: 'spend-routine',
+          amount_max: 100,
+          currency: 'USD',
+          action_type: 'charge',
+          amount_daily_max: 500,
+          amount_monthly_max: 5000,
+          transaction_count_daily_max: 20,
+        },
+        attestations: [{ domain: 'finance', blob: 'blob', expiresAt: now + 2700 }],
+        requiredDomains: ['finance'],
+        attestedDomains: ['finance'],
+        complete: true,
+      },
+    ]));
+
+    const result = await handler({ domain: 'spend' });
+    const text = result.content[0].text;
+    expect(text).toContain('[spend-routine]');
+    expect(text).toContain('spend@0.3');
+    expect(text).toContain('Bounds:');
+    expect(text).toContain('amount_max: 100');
+  });
+
+  it('returns error for unknown domain', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const handler = listAuthorizationsHandler(mockState([
+      {
+        frameHash: 'sha256:abc',
+        profileId: 'spend@0.3',
+        path: 'spend-routine',
+        frame: { profile: 'spend@0.3', path: 'spend-routine', amount_max: 100, currency: 'USD', action_type: 'charge' },
+        attestations: [{ domain: 'finance', blob: 'blob', expiresAt: now + 3600 }],
+        requiredDomains: ['finance'],
+        attestedDomains: ['finance'],
+        complete: true,
+      },
+    ]));
+
+    const result = await handler({ domain: 'ship' });
+    const text = result.content[0].text;
+    expect(text).toContain('No authorizations found for domain "ship"');
+    expect(text).toContain('spend');
+  });
+
+  it('compact overview includes call-to-action for domain details', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const handler = listAuthorizationsHandler(mockState([
+      {
+        frameHash: 'sha256:abc',
+        profileId: 'spend@0.3',
+        path: 'spend-routine',
+        frame: { profile: 'spend@0.3', path: 'spend-routine', amount_max: 100, currency: 'USD', action_type: 'charge' },
+        attestations: [{ domain: 'finance', blob: 'blob', expiresAt: now + 3600 }],
+        requiredDomains: ['finance'],
+        attestedDomains: ['finance'],
+        complete: true,
+      },
+    ]));
+
+    const result = await handler();
+    const text = result.content[0].text;
+    expect(text).toContain('list-authorizations(domain: "spend")');
   });
 });
 
@@ -223,5 +306,76 @@ describe('createGatedToolHandler — SP receipt integration', () => {
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('SP unavailable');
     expect(result.content[0].text).toContain('fetch failed');
+  });
+});
+
+// ─── buildProxiedToolDescription — gating tags ──────────────────────────────
+
+describe('buildProxiedToolDescription', () => {
+  it('returns [HAP: ungated] for tools with no gating', () => {
+    const tool: DiscoveredTool = {
+      originalName: 'list_products',
+      namespacedName: 'stripe__list_products',
+      integrationId: 'stripe',
+      description: 'List all products',
+      inputSchema: {},
+      gating: null,
+    };
+    const state = mockState();
+    const desc = buildProxiedToolDescription(tool, state);
+    expect(desc).toBe('[HAP: ungated] List all products');
+  });
+
+  it('returns gating tag with action type and checked fields for gated tool with auth', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const fullProfileId = 'github.com/humanagencyprotocol/hap-profiles/spend@0.3';
+    const tool: DiscoveredTool = {
+      originalName: 'create_payment_link',
+      namespacedName: 'stripe__create_payment_link',
+      integrationId: 'stripe',
+      description: 'Create a payment link',
+      inputSchema: {},
+      gating: {
+        profile: 'spend',
+        executionMapping: { unit_amount: { field: 'amount', divisor: 100 }, currency: 'currency' },
+        staticExecution: { action_type: 'charge' },
+      },
+    };
+    const state = mockState([{
+      frameHash: 'sha256:abc',
+      profileId: fullProfileId,
+      path: 'spend-routine',
+      frame: { profile: fullProfileId, path: 'spend-routine', amount_max: 100, currency: 'USD', action_type: 'charge' },
+      attestations: [{ domain: 'finance', blob: 'blob', expiresAt: now + 3600 }],
+      requiredDomains: ['finance'],
+      attestedDomains: ['finance'],
+      complete: true,
+    }]);
+
+    const desc = buildProxiedToolDescription(tool, state);
+    expect(desc).toContain('[HAP: spend');
+    expect(desc).toContain('charge');
+    expect(desc).toContain('amount, currency checked');
+    expect(desc).toContain('Create a payment link');
+  });
+
+  it('returns no active authorization tag for gated tool without auth', () => {
+    const tool: DiscoveredTool = {
+      originalName: 'create_payment_link',
+      namespacedName: 'stripe__create_payment_link',
+      integrationId: 'stripe',
+      description: 'Create a payment link',
+      inputSchema: {},
+      gating: {
+        profile: 'spend',
+        executionMapping: { unit_amount: { field: 'amount', divisor: 100 } },
+        staticExecution: { action_type: 'charge' },
+      },
+    };
+    const state = mockState(); // no authorizations
+
+    const desc = buildProxiedToolDescription(tool, state);
+    expect(desc).toContain('[HAP: spend — no active authorization]');
+    expect(desc).toContain('Create a payment link');
   });
 });

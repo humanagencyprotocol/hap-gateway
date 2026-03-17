@@ -8,7 +8,7 @@
  */
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import { configure } from '../lib/mcp-bridge';
+import { configure, pushServiceCredentials, resyncGates } from '../lib/mcp-bridge';
 import type { Vault } from '../lib/vault';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
@@ -66,6 +66,31 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
         } catch (err) {
           console.error('[Control Plane] Failed to configure MCP:', err);
         }
+      }
+
+      // Re-push all stored service credentials to MCP server
+      // (needed after MCP server restart — credentials are in-memory only)
+      for (const credId of vault.listCredentials()) {
+        try {
+          const creds = vault.getCredential(credId);
+          if (creds) {
+            await pushServiceCredentials(credId, creds);
+            console.error(`[Control Plane] Pushed ${credId} credentials to MCP`);
+          }
+        } catch (err) {
+          console.error(`[Control Plane] Failed to push ${credId} credentials:`, err);
+        }
+      }
+
+      // Re-sync stored gate content with SP attestations
+      // (attestation cache is in-memory, lost on MCP server restart)
+      try {
+        const { synced } = await resyncGates();
+        if (synced > 0) {
+          console.error(`[Control Plane] Re-synced ${synced} gate(s) with SP`);
+        }
+      } catch (err) {
+        console.error('[Control Plane] Failed to re-sync gates:', err);
       }
 
       // Return user data — NO Set-Cookie headers

@@ -44,6 +44,7 @@ Open `http://localhost:3002` (dev) or `http://localhost:3000` (production build)
 | `HAP_MCP_INTERNAL_URL` | `http://127.0.0.1:3030` | MCP internal endpoint (Control Plane → MCP) |
 | `HAP_UI_DIST` | `../../ui/dist` | Path to built UI assets (for production serving) |
 | `HAP_DATA_DIR` | `~/.hap` | Gate content storage directory |
+| `HAP_PROFILES_DIR` | `../../hap-profiles` (relative to cwd) | HAP profiles directory |
 
 ## Docker
 
@@ -75,3 +76,13 @@ pnpm --filter @hap/mcp-server test
 ```
 
 The `hap-core` test suite includes full cryptographic integration tests — real Ed25519 key generation, attestation signing, and Gatekeeper verification. No mocks for the protocol layer.
+
+## Login Re-sync
+
+When you log in through the control-plane UI, the login flow automatically:
+
+1. Pushes the SP session cookie and vault key to the MCP server
+2. Re-pushes all stored service credentials (Stripe API key, etc.)
+3. Re-syncs all stored gate content with the SP attestation cache
+
+This means after restarting the MCP server, a single login restores the full state — no need to re-enter credentials or re-create authorizations.

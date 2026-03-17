@@ -63,6 +63,18 @@ export async function pushServiceCredentials(
   }
 }
 
+export async function resyncGates(): Promise<{ synced: number }> {
+  const res = await fetch(`${MCP_BASE}/internal/resync-gates`, {
+    method: 'POST',
+    headers: internalHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(`MCP resyncGates failed: ${(err as { error: string }).error}`);
+  }
+  return res.json() as Promise<{ synced: number }>;
+}
+
 // ─── Integration management ──────────────────────────────────────────────
 
 export async function getIntegrations(): Promise<unknown> {

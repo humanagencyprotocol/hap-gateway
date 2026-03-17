@@ -11,33 +11,85 @@ The gateway connects to the HAP Service Provider at [humanagencyprotocol.com](ht
 ## How It Works
 
 ```
-Human (Browser)                           AI Agent (Claude, etc.)
-       │                                         │
-       │  1. Create authorization                 │
-       │  (bounds, gates, sign)                   │
-       ▼                                         │
-┌─────────────┐    proxy    ┌──────────────┐      │
-│  Admin      │◄──────────►│  External SP  │      │
-│  :3000      │   /api/*   │              │      │
-│             │            │  Signs with   │      │
-│  • Auth     │            │  Ed25519 key  │      │
-│  • UI       │            └──────────────┘      │
-│  • Vault    │                                   │
-│  • Gate     │──── /internal/* ────┐             │
-│    content  │   (loopback only)   │             │
-└─────────────┘                     ▼             │
-                            ┌──────────────┐      │
-                            │  MCP Gateway │◄─────┘
-                            │  :3030       │  2. Call tool
-                            │              │  (make-payment,
-                            │  • Gatekeeper│   send-email)
-                            │  • Tools     │
-                            │  • Cache     │  3. Gatekeeper
-                            │  • Gate store│  verifies bounds
-                            └──────────────┘  → approve/reject
+Human (Browser)                       AI Agent (Claude, etc.)
+      |                                       |
+      | 1. Create authorization                |
+      |    (bounds, gates, sign)               |
+      v                                        |
++--------------+  proxy  +--------------+      |
+| Admin        |<------->| External SP  |      |
+| :3000        | /api/*  |              |      |
+|              |         | Signs with   |      |
+| - Auth       |         | Ed25519 key  |      |
+| - UI         |         +--------------+      |
+| - Vault      |                               |
+| - Gate       |-- /internal/* --+             |
+|   content    |  (loopback only)|             |
++--------------+                 v             |
+                          +--------------+     |
+                          | MCP Gateway  |<----+
+                          | :3030        | 2. Call tool
+                          |              |    (make-payment,
+                          | - Gatekeeper |     send-email)
+                          | - Tools      |
+                          | - Cache      | 3. Gatekeeper
+                          | - Gate store |    verifies bounds
+                          +--------------+    -> approve/reject
 ```
 
 A human creates an authorization through a structured gate flow — defining bounds, articulating the problem, objective, and tradeoffs. The SP signs it. The agent connects via MCP and sees only the tools it's authorized to use. On every tool call, the Gatekeeper verifies the signature, checks TTL, confirms domain coverage, and enforces bounds. Only then does execution proceed.
+
+---
+
+## What the Agent Sees
+
+The gateway uses a two-tier context model to give agents exactly the information they need without wasting context tokens.
+
+### Tier 1: Mandate Brief (always loaded)
+
+When an agent connects, the MCP `instructions` field contains a compact brief:
+
+```
+You are an agent operating under the Human Agency Protocol (HAP).
+You have bounded authorities granted by human decision owners.
+
+=== ACTIVE AUTHORITIES ===
+
+[spend-routine] spend@0.3 (45 min remaining)
+  Bounds: amount_max: 100, currency: USD, action_type: charge, ...
+  Usage: $234/$500 daily, $1280/$5000 monthly, 8/20 tx
+  Problem: Enable automated purchasing for business operations.
+  4 gated tools, 19 read-only — call list-authorizations(domain: "spend") for details
+
+When you receive a task, call list-authorizations(domain) for full details.
+```
+
+Each tool also has a short gating tag in its description: `[HAP: spend — charge, amount checked]`, `[HAP: ungated]`, or `[HAP: spend — no active authorization]`.
+
+### Tier 2: list-authorizations (on demand)
+
+When the agent receives a task, it calls `list-authorizations(domain: "spend")` to load full detail for that domain only:
+
+- **Bounds** with all frame parameters
+- **Live consumption** — daily/monthly spend and transaction counts from the execution log
+- **Gate content** — problem, objective, and tradeoffs as articulated by the decision owner
+- **Capability map** — which tools are gated (with execution field mappings), which are read-only, which use default gating
+
+Calling without a domain returns a refreshed compact overview.
+
+### Organization Context
+
+Place a `context.md` file in `~/.hap/` (or `$HAP_DATA_DIR/`) to provide the agent with organizational context:
+
+```markdown
+## Organization
+Acme Corp — B2B SaaS for logistics.
+
+## Your Role
+Finance operations agent. Escalate unusual requests to #billing-ops.
+```
+
+This is included in the mandate brief and refreshed via `list-authorizations`.
 
 ---
 
