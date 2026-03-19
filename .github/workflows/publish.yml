@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: humanagencyprotocol/hap-demo
+  IMAGE_NAME: humanagencyprotocol/hap-gateway
 
 jobs:
   publish:
@@ -40,3 +40,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Make package public
+        run: |
+          gh api orgs/humanagencyprotocol/packages/container/hap-gateway \
+            --method PATCH --input - <<< '{"visibility":"public"}' \
+            2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
