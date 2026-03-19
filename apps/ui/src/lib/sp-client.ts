@@ -252,10 +252,10 @@ class SPClient {
         (d: string) => !(a.attestedDomains as string[] ?? []).includes(d)
       ),
       created_at: a.createdAt ? new Date((a.createdAt as number) * 1000).toISOString() : '',
-      earliest_expiry: a.attestations
+      earliest_expiry: (a.attestations as Array<{expiresAt: number}> | undefined)?.length
         ? new Date(Math.min(...(a.attestations as Array<{expiresAt: number}>).map(att => att.expiresAt)) * 1000).toISOString()
         : null,
-      remaining_seconds: a.attestations
+      remaining_seconds: (a.attestations as Array<{expiresAt: number}> | undefined)?.length
         ? Math.max(0, Math.min(...(a.attestations as Array<{expiresAt: number}>).map(att => att.expiresAt)) - Math.floor(Date.now() / 1000))
         : null,
     }));
