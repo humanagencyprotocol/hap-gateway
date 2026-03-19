@@ -22,6 +22,7 @@ import { createGitHubRouter } from './routes/github';
 import { requireAuth } from './middleware/auth';
 import { pushGateContent, setInternalSecret } from './lib/mcp-bridge';
 import { createMCPRouter } from './routes/mcp';
+import { startUpdateChecker, getUpdateStatus } from './lib/update-checker';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
 const port = parseInt(process.env.HAP_CP_PORT ?? '3000', 10);
@@ -135,9 +136,12 @@ app.use(
 // ─── Health check (public) ──────────────────────────────────────────────
 
 app.get('/health', (_req: Request, res: Response) => {
+  const update = getUpdateStatus();
   res.json({
     status: 'ok',
     vaultUnlocked: vault.isUnlocked(),
+    version: update.runningSha,
+    updateAvailable: update.updateAvailable,
   });
 });
 
@@ -164,4 +168,5 @@ app.listen(port, '0.0.0.0', () => {
   console.error(`[Control Plane]   SP proxy: ${SP_URL}`);
   console.error(`[Control Plane]   UI dist:  ${UI_DIST}`);
   console.error(`[Control Plane]   Internal secret: configured`);
+  startUpdateChecker();
 });

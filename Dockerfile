@@ -32,6 +32,10 @@ RUN mkdir -p /app/data
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+# Build metadata
+ARG GIT_SHA=dev
+ENV HAP_BUILD_SHA=$GIT_SHA
+
 # Set UI dist path for control-plane
 ENV HAP_UI_DIST=/app/apps/ui/dist
 ENV HAP_DATA_DIR=/app/data
