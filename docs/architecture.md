@@ -10,7 +10,7 @@ Human (Browser)                              AI Agent (MCP client)
       v                                             v
 +----------------+                          +----------------+
 | Control Plane  |--- /internal/* --------->| MCP Server     |
-| :3000          |   (loopback only)        | :3030          |
+| :3400          |   (loopback only)        | :3430          |
 |                |                          |                |
 | - Auth (login) |                          | - Gatekeeper   |
 | - UI (React)   |                          | - Tool proxy   |
@@ -33,8 +33,8 @@ Human (Browser)                              AI Agent (MCP client)
 
 | Port | Service | Package | Responsibility |
 |------|---------|---------|----------------|
-| **3000** | Control Plane | `apps/control-plane` | Serves UI, handles auth, proxies SP requests, manages vault and gate content, forwards credentials to MCP |
-| **3030** | MCP Server | `apps/mcp-server` | Gatekeeper verification, tool proxy, attestation cache, gate store, execution log, agent context |
+| **3400** | Control Plane | `apps/control-plane` | Serves UI, handles auth, proxies SP requests, manages vault and gate content, forwards credentials to MCP |
+| **3430** | MCP Server | `apps/mcp-server` | Gatekeeper verification, tool proxy, attestation cache, gate store, execution log, agent context |
 | — | hap-core | `packages/hap-core` | Shared protocol logic: types, bounds/context hashing, attestation verification, gatekeeper |
 
 ## Internal Communication
@@ -135,7 +135,7 @@ This prevents wasting context tokens on domains irrelevant to the current task.
 ```
 hap-gateway/
 +-- apps/
-|   +-- control-plane/          # Admin server (:3000)
+|   +-- control-plane/          # Admin server (:3400)
 |   |   +-- src/
 |   |       +-- index.ts        # Express server, SP proxy, gate-content routing
 |   |       +-- routes/
@@ -145,7 +145,7 @@ hap-gateway/
 |   |           +-- mcp-bridge.ts   # HTTP client to MCP /internal/*
 |   |           +-- vault.ts        # Vault encryption (PBKDF2 + AES-256-GCM)
 |   |
-|   +-- mcp-server/             # MCP Gateway (:3030)
+|   +-- mcp-server/             # MCP Gateway (:3430)
 |   |   +-- bin/http.ts         # Express server, SSE + Streamable HTTP, internal endpoints
 |   |   +-- src/
 |   |       +-- index.ts        # MCP server factory, tool registration, JSON Schema -> Zod

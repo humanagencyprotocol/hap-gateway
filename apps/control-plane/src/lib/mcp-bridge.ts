@@ -1,11 +1,11 @@
 /**
  * MCP Bridge — internal communication from control-plane to MCP server.
  *
- * All calls go to http://127.0.0.1:3030/internal/* within the same container.
+ * All calls go to http://127.0.0.1:3430/internal/* (local dev) or :3030 (Docker).
  * Each request includes an X-Internal-Secret header for authentication.
  */
 
-const MCP_BASE = process.env.HAP_MCP_INTERNAL_URL ?? 'http://127.0.0.1:3030';
+const MCP_BASE = process.env.HAP_MCP_INTERNAL_URL ?? 'http://127.0.0.1:3430';
 
 let internalSecret = '';
 

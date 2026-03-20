@@ -20,19 +20,17 @@ const BUILTIN_SERVICES: ServiceDef[] = [
     profile: 'spend',
     credFields: [
       { label: 'API Key', key: 'apiKey', type: 'password', placeholder: 'sk_live_...' },
-      { label: 'Webhook Secret', key: 'webhookSecret', type: 'password', placeholder: 'whsec_...' },
     ],
   },
   {
-    id: 'email-service',
-    name: 'Email Service',
-    description: 'Send and manage email communications',
+    id: 'gmail',
+    name: 'Gmail',
+    description: 'Send, draft, and read email via Gmail MCP',
     icon: '\u2709',
-    tools: ['send_email', 'list_templates'],
-    profile: 'publish',
+    tools: ['send_message', 'create_draft', 'send_draft', 'list_messages', 'get_message'],
+    profile: 'email',
     credFields: [
-      { label: 'SMTP Host', key: 'host', type: 'text', placeholder: 'smtp.example.com' },
-      { label: 'API Key', key: 'apiKey', type: 'password', placeholder: 'SG.xxx' },
+      { label: 'OAuth configured via gmail-mcp CLI', key: 'oauth', type: 'text', placeholder: 'Run: npx @shinzolabs/gmail-mcp auth' },
     ],
   },
   {
@@ -62,11 +60,14 @@ const BUILTIN_SERVICES: ServiceDef[] = [
 export function createVaultRouter(vault: Vault): Router {
   const router = Router();
 
-  // Ensure built-in services exist in the services file
+  // Ensure built-in services exist and credFields stay in sync with code
   function ensureBuiltinServices(): void {
     for (const svc of BUILTIN_SERVICES) {
-      if (!vault.getService(svc.id)) {
+      const existing = vault.getService(svc.id);
+      if (!existing) {
         vault.setService(svc.id, svc);
+      } else {
+        vault.setService(svc.id, { ...existing, credFields: svc.credFields });
       }
     }
   }
@@ -96,17 +97,7 @@ export function createVaultRouter(vault: Vault): Router {
       res.json({ configured: false });
       return;
     }
-    // Return non-secret fields in clear, mask secret-looking ones
-    const SECRET_KEYS = ['apiKey', 'apikey', 'api_key', 'pat', 'token', 'secret', 'password', 'webhookSecret'];
-    const fields: Record<string, string> = {};
-    for (const [key, value] of Object.entries(cred)) {
-      if (SECRET_KEYS.includes(key)) {
-        fields[key] = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
-      } else {
-        fields[key] = value;
-      }
-    }
-    res.json({ configured: true, fieldNames: Object.keys(cred), fields });
+    res.json({ configured: true, fieldNames: Object.keys(cred), fields: cred });
   });
 
   /**

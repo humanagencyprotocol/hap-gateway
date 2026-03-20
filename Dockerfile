@@ -39,6 +39,9 @@ ENV HAP_BUILD_SHA=$GIT_SHA
 # Set UI dist path for control-plane
 ENV HAP_UI_DIST=/app/apps/ui/dist
 ENV HAP_DATA_DIR=/app/data
+ENV HAP_CP_PORT=3000
+ENV HAP_MCP_PORT=3030
+ENV HAP_MCP_INTERNAL_URL=http://127.0.0.1:3030
 ENV NODE_ENV=production
 
 EXPOSE 3000 3030

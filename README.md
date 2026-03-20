@@ -18,7 +18,7 @@ Human (Browser)                       AI Agent (Claude, etc.)
       v                                        |
 +--------------+  proxy  +--------------+      |
 | Admin        |<------->| External SP  |      |
-| :3000        | /api/*  |              |      |
+| :3400        | /api/*  |              |      |
 |              |         | Signs with   |      |
 | - Auth       |         | Ed25519 key  |      |
 | - UI         |         +--------------+      |
@@ -28,7 +28,7 @@ Human (Browser)                       AI Agent (Claude, etc.)
 +--------------+                 v             |
                           +--------------+     |
                           | MCP Gateway  |<----+
-                          | :3030        | 2. Call tool
+                          | :3430        | 2. Call tool
                           |              |    (make-payment,
                           | - Gatekeeper |     send-email)
                           | - Tools      |
@@ -98,19 +98,19 @@ This is included in the mandate brief and refreshed via `list-authorizations`.
 Requires [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
-docker run -d --name hap-gateway -p 7000:3000 -p 7030:3030 -v $HOME/.hap:/app/data ghcr.io/humanagencyprotocol/hap-gateway
+docker run -d --name hap-gateway -p 7400:3000 -p 7430:3030 -v $HOME/.hap:/app/data ghcr.io/humanagencyprotocol/hap-gateway
 ```
 
-Open `http://localhost:7000`. The MCP server is available at `http://localhost:7030`.
+Open `http://localhost:7400`. The MCP server is available at `http://localhost:7430`.
 
 ### Connect an Agent
 
-Any MCP-compatible client can connect to `http://localhost:7030`:
+Any MCP-compatible client can connect to `http://localhost:7430`:
 
 ```
-Streamable HTTP:  POST http://localhost:7030/mcp     (recommended)
-SSE transport:    GET  http://localhost:7030/sse
-Health check:     GET  http://localhost:7030/health
+Streamable HTTP:  POST http://localhost:7430/mcp     (recommended)
+SSE transport:    GET  http://localhost:7430/sse
+Health check:     GET  http://localhost:7430/health
 ```
 
 **Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
@@ -119,7 +119,7 @@ Health check:     GET  http://localhost:7030/health
 {
   "mcpServers": {
     "hap": {
-      "url": "http://localhost:7030/sse"
+      "url": "http://localhost:7430/sse"
     }
   }
 }

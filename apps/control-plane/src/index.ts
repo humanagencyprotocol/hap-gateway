@@ -25,7 +25,7 @@ import { createMCPRouter } from './routes/mcp';
 import { startUpdateChecker, getUpdateStatus } from './lib/update-checker';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
-const port = parseInt(process.env.HAP_CP_PORT ?? '3000', 10);
+const port = parseInt(process.env.HAP_CP_PORT ?? '3402', 10);
 
 // UI dist path: in Docker it's /app/ui/dist, locally fall back to sibling
 const UI_DIST = process.env.HAP_UI_DIST ?? join(import.meta.dirname ?? __dirname, '../../ui/dist');

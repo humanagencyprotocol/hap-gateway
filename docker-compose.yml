@@ -2,8 +2,8 @@ services:
   hap:
     build: .
     ports:
-      - "${HAP_UI_PORT:-7000}:3000"
-      - "${HAP_MCP_PORT:-7030}:3030"
+      - "${HAP_UI_PORT:-7400}:3000"
+      - "${HAP_MCP_PORT:-7430}:3030"
     volumes:
       - ${HOME}/.hap:/app/data
     environment:

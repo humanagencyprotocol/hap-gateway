@@ -34,20 +34,20 @@ This starts all three services concurrently with auto-reload:
 
 | Service | Port | What it does |
 |---------|------|-------------|
-| UI | 3002 | Vite dev server with hot module replacement |
-| Control Plane | 3000 | Auth, vault, SP proxy — auto-restarts on file changes |
-| MCP Server | 3030 | Gatekeeper, tool proxy — auto-restarts on file changes |
+| UI | 3400 | Vite dev server with hot module replacement |
+| Control Plane | 3402 | Auth, vault, SP proxy — auto-restarts on file changes |
+| MCP Server | 3430 | Gatekeeper, tool proxy — auto-restarts on file changes |
 
-Open `http://localhost:3002` for the UI (proxies API calls to the control plane).
+Open `http://localhost:3400` for the UI (proxies API calls to the control plane).
 
 ### Individual services
 
 If you only need to work on one part:
 
 ```bash
-pnpm dev:ui        # UI only (port 3002, HMR)
-pnpm dev:control   # Control plane only (port 3000, auto-restart)
-pnpm dev:mcp       # MCP server only (port 3030, auto-restart)
+pnpm dev:ui        # UI only (port 3400, HMR)
+pnpm dev:control   # Control plane only (port 3402, auto-restart)
+pnpm dev:mcp       # MCP server only (port 3430, auto-restart)
 ```
 
 ### With local SP
@@ -71,9 +71,9 @@ By default, the gateway connects to `https://www.humanagencyprotocol.com`. Just 
 | Variable | Default | Description |
 |---|---|---|
 | `HAP_SP_URL` | `https://www.humanagencyprotocol.com` | Service Provider URL |
-| `HAP_CP_PORT` | `3000` | Control Plane port |
-| `HAP_MCP_PORT` | `3030` | MCP Server port |
-| `HAP_MCP_INTERNAL_URL` | `http://127.0.0.1:3030` | MCP internal endpoint (Control Plane → MCP) |
+| `HAP_CP_PORT` | `3402` | Control Plane port |
+| `HAP_MCP_PORT` | `3430` | MCP Server port |
+| `HAP_MCP_INTERNAL_URL` | `http://127.0.0.1:3430` | MCP internal endpoint (Control Plane → MCP) |
 | `HAP_INTERNAL_SECRET` | (empty = skip check) | Shared secret for internal endpoints |
 | `HAP_UI_DIST` | `../../ui/dist` | Path to built UI assets |
 | `HAP_DATA_DIR` | `~/.hap` | Persistent storage directory |
@@ -119,7 +119,7 @@ Or manually:
 
 ```bash
 docker build -t hap-gateway .
-docker run -p 7000:3000 -p 7030:3030 \
+docker run -p 7400:3000 -p 7430:3030 \
   -e HAP_SP_URL=https://www.humanagencyprotocol.com \
   -v $HOME/.hap:/app/data \
   hap-gateway

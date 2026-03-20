@@ -26,7 +26,7 @@ import { IntegrationManager } from '../src/lib/integration-manager';
 import { loadProfiles } from '../src/lib/profile-loader';
 
 const spUrl = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
-const port = parseInt(process.env.HAP_MCP_PORT ?? '3030', 10);
+const port = parseInt(process.env.HAP_MCP_PORT ?? '3430', 10);
 
 // ─── Shared state (one instance for all connections) ───────────────────────
 

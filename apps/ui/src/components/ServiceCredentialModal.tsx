@@ -23,12 +23,17 @@ export function ServiceCredentialModal({ serviceId, serviceName, fields, connect
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [existingFields, setExistingFields] = useState<string[]>([]);
+  const [maskedValues, setMaskedValues] = useState<Record<string, string>>({});
 
   // Load existing credential status on open
   useEffect(() => {
     spClient.getCredential(serviceId).then(status => {
       if (status.configured && status.fieldNames) {
         setExistingFields(status.fieldNames);
+        if (status.fields) {
+          setMaskedValues(status.fields);
+          setValues(status.fields);
+        }
       }
     }).catch(() => {/* ignore */});
   }, [serviceId]);
@@ -79,7 +84,7 @@ export function ServiceCredentialModal({ serviceId, serviceName, fields, connect
                   <input
                     className="form-input"
                     type={showSecrets[field.key] ? 'text' : 'password'}
-                    placeholder={field.placeholder}
+                    placeholder={maskedValues[field.key] || field.placeholder}
                     value={values[field.key] || ''}
                     onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
                   />
