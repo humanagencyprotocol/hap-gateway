@@ -35,6 +35,7 @@ export interface AttestResponse {
 
 export interface ProfileSummary {
   id: string;
+  name?: string;
   version: string;
   description: string;
   paths: string[];

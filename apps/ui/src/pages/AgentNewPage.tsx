@@ -6,6 +6,7 @@ import { StepIndicator } from '../components/StepIndicator';
 import { GroupSelector } from '../components/GroupSelector';
 import { SelectionCard } from '../components/SelectionCard';
 import { DomainBadge } from '../components/DomainBadge';
+import { profileDisplayName } from '../lib/profile-display';
 
 export function AgentNewPage() {
   const navigate = useNavigate();
@@ -72,8 +73,9 @@ export function AgentNewPage() {
                 selected={selectedProfile === p.id}
                 onClick={() => { setSelectedProfile(p.id); setSelectedPath(''); }}
               >
-                <div className="selection-card-title">{p.id}</div>
+                <div className="selection-card-title">{profileDisplayName(p.id, p.name)}</div>
                 <div className="selection-card-subtitle">{p.description}</div>
+                <div className="selection-card-id">{p.id}</div>
                 <div className="selection-card-meta">
                   {p.paths.map(path => (
                     <DomainBadge key={path} domain={path} />

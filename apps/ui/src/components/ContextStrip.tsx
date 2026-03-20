@@ -1,3 +1,5 @@
+import { profileDisplayName } from '../lib/profile-display';
+
 interface Props {
   profileId?: string;
   path?: string;
@@ -16,7 +18,7 @@ export function ContextStrip({ profileId, path, bounds, groupName, domain, onSwi
           <span><strong>{groupName}</strong>{domain ? ` / ${domain}` : ''}</span>
         </>
       )}
-      {profileId && <span><strong>Profile:</strong> {profileId}</span>}
+      {profileId && <span><strong>Profile:</strong> {profileDisplayName(profileId)}</span>}
       {path && <span><strong>Path:</strong> {path}</span>}
       {bounds && <span><strong>Bounds:</strong> {bounds}</span>}
       {onSwitch && (

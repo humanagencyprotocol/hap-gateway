@@ -98,19 +98,19 @@ This is included in the mandate brief and refreshed via `list-authorizations`.
 Requires [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
-docker run -d --name hap-gateway -p 3000:3000 -p 3030:3030 -v $HOME/.hap:/app/data ghcr.io/humanagencyprotocol/hap-gateway
+docker run -d --name hap-gateway -p 7000:3000 -p 7030:3030 -v $HOME/.hap:/app/data ghcr.io/humanagencyprotocol/hap-gateway
 ```
 
-Open `http://localhost:3000`. The MCP server is available at `http://localhost:3030`.
+Open `http://localhost:7000`. The MCP server is available at `http://localhost:7030`.
 
 ### Connect an Agent
 
-Any MCP-compatible client can connect to `http://localhost:3030`:
+Any MCP-compatible client can connect to `http://localhost:7030`:
 
 ```
-Streamable HTTP:  POST http://localhost:3030/mcp     (recommended)
-SSE transport:    GET  http://localhost:3030/sse
-Health check:     GET  http://localhost:3030/health
+Streamable HTTP:  POST http://localhost:7030/mcp     (recommended)
+SSE transport:    GET  http://localhost:7030/sse
+Health check:     GET  http://localhost:7030/health
 ```
 
 **Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
@@ -119,7 +119,7 @@ Health check:     GET  http://localhost:3030/health
 {
   "mcpServers": {
     "hap": {
-      "url": "http://localhost:3030/sse"
+      "url": "http://localhost:7030/sse"
     }
   }
 }

@@ -628,7 +628,7 @@ export function SettingsServicesPage() {
             <div className="status-banner status-banner-error">
               <span className="status-banner-icon">!</span>
               <span className="status-banner-text">
-                MCP server is not reachable. Make sure it is running on port 3030.
+                MCP server is not reachable. Make sure it is running.
               </span>
             </div>
           ) : (

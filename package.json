@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "pnpm -r build",
+    "dev": "pnpm --filter @hap/ui dev & pnpm --filter @hap/control-plane dev & pnpm --filter @hap/mcp-server dev",
     "dev:ui": "pnpm --filter @hap/ui dev",
     "dev:mcp": "pnpm --filter @hap/mcp-server dev",
     "dev:control": "pnpm --filter @hap/control-plane dev",

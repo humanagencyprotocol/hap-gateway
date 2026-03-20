@@ -5,6 +5,7 @@ import { spClient } from '../lib/sp-client';
 import { computeBoundsHashBrowser, computeContextHashBrowser, hashGateContent } from '../lib/frame';
 import { StepIndicator } from '../components/StepIndicator';
 import { DomainBadge } from '../components/DomainBadge';
+import { profileDisplayName } from '../lib/profile-display';
 import type { AgentProfile, AgentBoundsParams, AgentContextParams, AgentFrameParams } from '@hap/core';
 
 interface GateData {
@@ -151,7 +152,10 @@ export function AgentReviewPage() {
 
         <dl className="review-grid">
           <dt>Profile</dt>
-          <dd>{authData.profileId}</dd>
+          <dd>
+            {profileDisplayName(authData.profileId)}
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>{authData.profileId}</div>
+          </dd>
           <dt>Path</dt>
           <dd>{authData.path}</dd>
           <dt>Domain</dt>
