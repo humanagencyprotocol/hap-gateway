@@ -1,92 +1,88 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { spClient, type PendingItem } from '../lib/sp-client';
+import { spClient, type ExecutionReceipt } from '../lib/sp-client';
 import { profileDisplayName } from '../lib/profile-display';
 import { ProfileBadge } from '../components/ProfileBadge';
-import { StatusBadge } from '../components/StatusBadge';
-import { DomainBadge } from '../components/DomainBadge';
 import { EmptyState } from '../components/EmptyState';
 
-type Status = 'active' | 'pending' | 'expired';
 type TimeRange = '1d' | '7d' | '30d' | 'all';
 
-function getStatus(item: PendingItem): Status {
-  if (item.remaining_seconds !== null && item.remaining_seconds <= 0) return 'expired';
-  if (item.missing_domains.length > 0) return 'pending';
-  return 'active';
+function formatDate(ts: number): string {
+  return new Date(ts * 1000).toLocaleString();
 }
 
-function isWithinTimeRange(item: PendingItem, range: TimeRange): boolean {
+function isWithinTimeRange(receipt: ExecutionReceipt, range: TimeRange): boolean {
   if (range === 'all') return true;
   const days = range === '1d' ? 1 : range === '7d' ? 7 : 30;
-  const cutoff = Date.now() - days * 86400_000;
-  return new Date(item.created_at).getTime() >= cutoff;
+  const cutoff = Math.floor(Date.now() / 1000) - days * 86400;
+  return receipt.timestamp >= cutoff;
 }
 
-function matchesSearch(item: PendingItem, query: string): boolean {
+function matchesSearch(receipt: ExecutionReceipt, query: string): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
   return (
-    item.profile_id.toLowerCase().includes(q) ||
-    profileDisplayName(item.profile_id).toLowerCase().includes(q) ||
-    item.path.toLowerCase().includes(q) ||
-    item.frame_hash.toLowerCase().includes(q) ||
-    item.required_domains.some(d => d.toLowerCase().includes(q)) ||
-    item.attested_domains.some(d => d.toLowerCase().includes(q))
+    receipt.profileId.toLowerCase().includes(q) ||
+    profileDisplayName(receipt.profileId).toLowerCase().includes(q) ||
+    receipt.path.toLowerCase().includes(q) ||
+    receipt.action.toLowerCase().includes(q) ||
+    receipt.attestationHash.toLowerCase().includes(q) ||
+    receipt.id.toLowerCase().includes(q) ||
+    JSON.stringify(receipt.executionContext).toLowerCase().includes(q)
   );
 }
 
 export function AuditPage() {
-  const { activeDomain } = useAuth();
-  const [items, setItems] = useState<PendingItem[]>([]);
+  const [receipts, setReceipts] = useState<ExecutionReceipt[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Search & filter state
   const [search, setSearch] = useState('');
-  const [statusFilters, setStatusFilters] = useState<Set<Status>>(new Set());
   const [profileFilters, setProfileFilters] = useState<Set<string>>(new Set());
+  const [actionFilters, setActionFilters] = useState<Set<string>>(new Set());
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const fetchItems = useCallback(() => {
-    if (!activeDomain) { setLoading(false); return; }
+  const fetchReceipts = useCallback(() => {
     setLoading(true);
-    spClient.getPending(activeDomain)
-      .then(setItems)
+    spClient.getMyReceipts({ limit: 200 })
+      .then(setReceipts)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [activeDomain]);
+  }, []);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => { fetchReceipts(); }, [fetchReceipts]);
 
-  // Derive available profiles from data
+  // Auto-refresh every 30s
+  useEffect(() => {
+    const interval = setInterval(fetchReceipts, 30000);
+    return () => clearInterval(interval);
+  }, [fetchReceipts]);
+
+  // Derive available profiles and actions from data
   const availableProfiles = useMemo(() => {
     const set = new Set<string>();
-    for (const item of items) set.add(profileDisplayName(item.profile_id));
+    for (const r of receipts) set.add(profileDisplayName(r.profileId));
     return [...set].sort();
-  }, [items]);
+  }, [receipts]);
+
+  const availableActions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of receipts) set.add(r.action);
+    return [...set].sort();
+  }, [receipts]);
 
   // Apply all filters
   const filtered = useMemo(() => {
-    return items.filter(item => {
-      if (!matchesSearch(item, search)) return false;
-      if (statusFilters.size > 0 && !statusFilters.has(getStatus(item))) return false;
-      if (profileFilters.size > 0 && !profileFilters.has(profileDisplayName(item.profile_id))) return false;
-      if (!isWithinTimeRange(item, timeRange)) return false;
+    return receipts.filter(r => {
+      if (!matchesSearch(r, search)) return false;
+      if (profileFilters.size > 0 && !profileFilters.has(profileDisplayName(r.profileId))) return false;
+      if (actionFilters.size > 0 && !actionFilters.has(r.action)) return false;
+      if (!isWithinTimeRange(r, timeRange)) return false;
       return true;
     });
-  }, [items, search, statusFilters, profileFilters, timeRange]);
+  }, [receipts, search, profileFilters, actionFilters, timeRange]);
 
-  // Active filter chips
-  const hasActiveFilters = statusFilters.size > 0 || profileFilters.size > 0 || timeRange !== 'all';
-
-  function toggleStatus(s: Status) {
-    setStatusFilters(prev => {
-      const next = new Set(prev);
-      next.has(s) ? next.delete(s) : next.add(s);
-      return next;
-    });
-  }
+  const hasActiveFilters = profileFilters.size > 0 || actionFilters.size > 0 || timeRange !== 'all';
 
   function toggleProfile(p: string) {
     setProfileFilters(prev => {
@@ -96,9 +92,17 @@ export function AuditPage() {
     });
   }
 
+  function toggleAction(a: string) {
+    setActionFilters(prev => {
+      const next = new Set(prev);
+      next.has(a) ? next.delete(a) : next.add(a);
+      return next;
+    });
+  }
+
   function clearAllFilters() {
-    setStatusFilters(new Set());
     setProfileFilters(new Set());
+    setActionFilters(new Set());
     setTimeRange('all');
     setSearch('');
   }
@@ -107,7 +111,7 @@ export function AuditPage() {
     <>
       <div className="page-header">
         <h1 className="page-title">Agent Receipts</h1>
-        <p className="page-subtitle">Execution history and authorization events.</p>
+        <p className="page-subtitle">Execution history for authorized tool calls.</p>
       </div>
 
       {/* Search + Filter toggle row */}
@@ -117,7 +121,7 @@ export function AuditPage() {
           <input
             type="text"
             className="form-input search-input"
-            placeholder="Search by profile, path, domain, or hash\u2026"
+            placeholder="Search by profile, action, path, or hash\u2026"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -131,29 +135,13 @@ export function AuditPage() {
           className={`btn btn-sm btn-secondary${filtersOpen ? ' active' : ''}`}
           onClick={() => setFiltersOpen(!filtersOpen)}
         >
-          Filters{hasActiveFilters ? ` (${statusFilters.size + profileFilters.size + (timeRange !== 'all' ? 1 : 0)})` : ''}
+          Filters{hasActiveFilters ? ` (${profileFilters.size + actionFilters.size + (timeRange !== 'all' ? 1 : 0)})` : ''}
         </button>
       </div>
 
       {/* Expandable filter panel */}
       {filtersOpen && (
         <div className="filter-panel">
-          {/* Status */}
-          <div className="filter-section">
-            <div className="filter-label">Status</div>
-            <div className="filter-chips">
-              {(['active', 'pending', 'expired'] as const).map(s => (
-                <button
-                  key={s}
-                  className={`filter-chip${statusFilters.has(s) ? ' selected' : ''}`}
-                  onClick={() => toggleStatus(s)}
-                >
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Profile */}
           {availableProfiles.length > 1 && (
             <div className="filter-section">
@@ -166,6 +154,24 @@ export function AuditPage() {
                     onClick={() => toggleProfile(p)}
                   >
                     {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action */}
+          {availableActions.length > 1 && (
+            <div className="filter-section">
+              <div className="filter-label">Action</div>
+              <div className="filter-chips">
+                {availableActions.map(a => (
+                  <button
+                    key={a}
+                    className={`filter-chip${actionFilters.has(a) ? ' selected' : ''}`}
+                    onClick={() => toggleAction(a)}
+                  >
+                    {a}
                   </button>
                 ))}
               </div>
@@ -193,14 +199,14 @@ export function AuditPage() {
       {/* Active filter chips */}
       {hasActiveFilters && (
         <div className="active-filters">
-          {[...statusFilters].map(s => (
-            <span key={s} className="active-chip" onClick={() => toggleStatus(s)}>
-              {s} <span className="chip-remove">&times;</span>
-            </span>
-          ))}
           {[...profileFilters].map(p => (
             <span key={p} className="active-chip" onClick={() => toggleProfile(p)}>
               {p} <span className="chip-remove">&times;</span>
+            </span>
+          ))}
+          {[...actionFilters].map(a => (
+            <span key={a} className="active-chip" onClick={() => toggleAction(a)}>
+              {a} <span className="chip-remove">&times;</span>
             </span>
           ))}
           {timeRange !== 'all' && (
@@ -219,48 +225,52 @@ export function AuditPage() {
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={'\u2315'}
-          title={items.length === 0 ? 'No receipts yet' : 'No matching receipts'}
-          text={items.length === 0
-            ? 'Execution events will appear here after an agent uses an authorized tool.'
+          title={receipts.length === 0 ? 'No receipts yet' : 'No matching receipts'}
+          text={receipts.length === 0
+            ? 'Execution receipts will appear here after an agent uses an authorized tool.'
             : 'Try adjusting your search or filters.'}
         />
       ) : (
         <>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.75rem' }}>
-            {filtered.length === items.length
-              ? `${items.length} receipt${items.length !== 1 ? 's' : ''}`
-              : `${filtered.length} of ${items.length} receipts`}
+            {filtered.length === receipts.length
+              ? `${receipts.length} receipt${receipts.length !== 1 ? 's' : ''}`
+              : `${filtered.length} of ${receipts.length} receipts`}
           </div>
           <div className="timeline">
-            {filtered.map(item => {
-              const status = getStatus(item);
-              return (
-                <div className={`timeline-event${status === 'expired' ? ' expired' : ''}`} key={item.frame_hash}>
-                  <div className="card" style={{ marginBottom: 0 }}>
-                    <div className="auth-card-header">
-                      <ProfileBadge profileId={item.profile_id} />
-                      <span className="auth-card-path">{item.path}</span>
-                      <StatusBadge status={status} />
-                      <span className="auth-card-time">
-                        {new Date(item.created_at).toLocaleString()}
-                      </span>
+            {filtered.map(receipt => (
+              <div className="timeline-event" key={receipt.id}>
+                <div className="card" style={{ marginBottom: 0 }}>
+                  <div className="auth-card-header">
+                    <ProfileBadge profileId={receipt.profileId} />
+                    <span className="auth-card-path">{receipt.path}</span>
+                    <span className="receipt-action">{receipt.action}</span>
+                    <span className="auth-card-time">
+                      {formatDate(receipt.timestamp)}
+                    </span>
+                  </div>
+
+                  {/* Execution context */}
+                  {Object.keys(receipt.executionContext).length > 0 && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.375rem' }}>
+                      {Object.entries(receipt.executionContext)
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(' \u00B7 ')}
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                      {item.required_domains.map(d => (
-                        <DomainBadge
-                          key={d}
-                          domain={d}
-                          attested={item.attested_domains.includes(d)}
-                        />
-                      ))}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', fontFamily: "'SF Mono', Monaco, monospace", wordBreak: 'break-all' }}>
-                      {item.frame_hash}
-                    </div>
+                  )}
+
+                  {/* Cumulative state */}
+                  <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                    <span>Daily: {receipt.cumulativeState.daily.count} calls, ${receipt.cumulativeState.daily.amount}</span>
+                    <span>Monthly: {receipt.cumulativeState.monthly.count} calls, ${receipt.cumulativeState.monthly.amount}</span>
+                  </div>
+
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: "'SF Mono', Monaco, monospace", wordBreak: 'break-all', marginTop: '0.375rem' }}>
+                    {receipt.attestationHash}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </>
       )}

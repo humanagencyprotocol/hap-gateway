@@ -1792,3 +1792,15 @@ code {
   padding: 0.2rem 0;
 }
 .clear-filters:hover { color: var(--text-primary); }
+
+.receipt-action {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: 'SF Mono', Monaco, monospace;
+}

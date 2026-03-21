@@ -163,6 +163,23 @@ export interface GateContentEntry {
   storedAt: string;
 }
 
+export interface ExecutionReceipt {
+  id: string;
+  groupId: string;
+  userId: string;
+  attestationHash: string;
+  profileId: string;
+  path: string;
+  action: string;
+  executionContext: Record<string, unknown>;
+  cumulativeState: {
+    daily: { amount: number; count: number };
+    monthly: { amount: number; count: number };
+  };
+  timestamp: number;
+  signature: string;
+}
+
 export interface McpHealthResponse {
   status: string;
   transports: string[];
@@ -295,6 +312,18 @@ class SPClient {
         ? Math.max(0, Math.min(...(a.attestations as Array<{expiresAt: number}>).map(att => att.expiresAt)) - Math.floor(Date.now() / 1000))
         : null,
     }));
+  }
+
+  async getMyReceipts(options?: { date?: string; profile?: string; limit?: number }): Promise<ExecutionReceipt[]> {
+    const params = new URLSearchParams();
+    if (options?.date) params.set('date', options.date);
+    if (options?.profile) params.set('profile', options.profile);
+    if (options?.limit) params.set('limit', String(options.limit));
+    const qs = params.toString();
+    const res = await this.fetch(`/api/receipts/mine${qs ? '?' + qs : ''}`);
+    if (!res.ok) throw new Error(`Failed to fetch receipts: ${res.status}`);
+    const data = await res.json();
+    return data.receipts ?? [];
   }
 
   async revokeAttestation(frameHash: string, reason?: string): Promise<void> {
