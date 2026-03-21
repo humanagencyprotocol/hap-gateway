@@ -47,6 +47,8 @@ export interface IntegrationConfig {
    * Example: { "STRIPE_API_KEY": "stripe.apiKey" }
    */
   envKeys: Record<string, string>;
+  /** Static environment variables for the MCP process (e.g., { PORT: "0" }) */
+  env?: Record<string, string>;
   /** HAP profile ID for tool gating (e.g., "spend"). Null = ungated. */
   profile: string | null;
   /** Tool gating from integration manifest (preferred over profile's toolGating). */

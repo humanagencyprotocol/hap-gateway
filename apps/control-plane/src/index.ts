@@ -20,7 +20,7 @@ import { createVaultRouter } from './routes/vault';
 import { createAIRouter } from './routes/ai';
 import { createGitHubRouter } from './routes/github';
 import { requireAuth } from './middleware/auth';
-import { pushGateContent, setInternalSecret, getManifests } from './lib/mcp-bridge';
+import { pushGateContent, setInternalSecret, getManifests, getGateContent } from './lib/mcp-bridge';
 import { createMCPRouter } from './routes/mcp';
 import { startUpdateChecker, getUpdateStatus } from './lib/update-checker';
 
@@ -226,6 +226,18 @@ app.use('/github', jsonParser, authGuard, createGitHubRouter(vault));
 
 // MCP integration management routes
 app.use('/mcp', jsonParser, authGuard, createMCPRouter());
+
+// Gate content retrieval — protected
+app.get('/gate-content', authGuard, async (req: Request, res: Response) => {
+  try {
+    const path = req.query.path as string | undefined;
+    const data = await getGateContent(path);
+    res.json(data);
+  } catch (err) {
+    console.error('[Control Plane] Gate content retrieval error:', err);
+    res.status(500).json({ error: 'Failed to fetch gate content from MCP server' });
+  }
+});
 
 // Gate content forward — protected
 app.post('/gate-content', jsonParser, authGuard, async (req: Request, res: Response) => {

@@ -1,5 +1,5 @@
 interface Props {
-  status: 'active' | 'pending' | 'expired';
+  status: 'active' | 'pending' | 'expired' | 'revoked';
   label?: string;
 }
 
@@ -7,6 +7,7 @@ const LABELS: Record<string, string> = {
   active: 'Active',
   pending: 'Pending',
   expired: 'Expired',
+  revoked: 'Revoked',
 };
 
 export function StatusBadge({ status, label }: Props) {

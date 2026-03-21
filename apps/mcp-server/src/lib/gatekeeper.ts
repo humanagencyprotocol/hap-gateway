@@ -71,8 +71,13 @@ export class MCPGatekeeper {
     // v0.4: prefer bounds over frame; use context from override (gate store) or cached auth.
     const resolvedBounds = override?.bounds ?? auth.bounds ?? auth.frame;
     const resolvedContext = override?.context ?? auth.context;
+
+    // Ensure profile and path are present — the core gatekeeper needs them to resolve
+    // the profile, but v0.4 bounds objects from the SP may not include them.
+    const frame = { ...resolvedBounds, profile: auth.profileId, path: auth.path };
+
     const request: GatekeeperRequest = {
-      frame: resolvedBounds,
+      frame,
       attestations: auth.attestations.map(a => a.blob),
       execution,
       ...(resolvedContext ? { context: resolvedContext } : {}),

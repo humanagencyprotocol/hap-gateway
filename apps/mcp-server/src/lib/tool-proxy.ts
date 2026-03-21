@@ -13,6 +13,41 @@ import type { IntegrationManager, DiscoveredTool } from './integration-manager';
 import type { SharedState, EnrichedAuthorization } from './shared-state';
 import { SPReceiptError } from './sp-client';
 
+/**
+ * Apply a single mapping entry to produce an execution context field.
+ * Handles divisor, transform, and direct copy.
+ */
+function applyMapping(
+  m: { field: string; divisor?: number; transform?: string },
+  value: unknown,
+  execution: Record<string, string | number>,
+): void {
+  if (m.divisor) {
+    const numValue = typeof value === 'number' ? value : Number(value);
+    execution[m.field] = numValue / m.divisor;
+    return;
+  }
+  const arr = Array.isArray(value) ? value.map(String) : [String(value)];
+  switch (m.transform) {
+    case 'length':
+      execution[m.field] = arr.length;
+      break;
+    case 'join':
+      execution[m.field] = arr.join(',');
+      break;
+    case 'join_domains': {
+      const domains = [...new Set(arr.map(email => {
+        const at = email.lastIndexOf('@');
+        return at >= 0 ? email.substring(at + 1).toLowerCase() : email.toLowerCase();
+      }))].sort();
+      execution[m.field] = domains.join(',');
+      break;
+    }
+    default:
+      execution[m.field] = typeof value === 'number' ? value : String(value);
+  }
+}
+
 /** Match a short profile name (e.g. "spend") against a full qualified ID (e.g. "github.com/.../spend@0.3") */
 export function profileMatches(profileId: string, shortName: string): boolean {
   return profileId === shortName || profileId.includes('/' + shortName + '@') || profileId.endsWith('/' + shortName);
@@ -86,10 +121,16 @@ export function createGatedToolHandler(
         if (typeof mapping === 'string') {
           // Direct mapping: argName → contextField
           execution[mapping] = typeof value === 'number' ? value : String(value);
-        } else {
+        } else if (Array.isArray(mapping)) {
+          // Array mapping: one arg → multiple execution fields
+          for (const m of mapping) applyMapping(m, value, execution);
+        } else if ('divisor' in mapping) {
           // Divisor mapping: convert units (e.g., cents ÷ 100 → EUR)
           const numValue = typeof value === 'number' ? value : Number(value);
           execution[mapping.field] = numValue / mapping.divisor;
+        } else if ('transform' in mapping) {
+          // Transform mapping: array-aware transforms
+          applyMapping(mapping, value, execution);
         }
       }
     }
@@ -215,8 +256,8 @@ export function buildProxiedToolDescription(
   if (tool.gating.staticExecution?.action_type) {
     parts.push(String(tool.gating.staticExecution.action_type));
   }
-  const mappedFields = Object.values(tool.gating.executionMapping).map(m =>
-    typeof m === 'string' ? m : m.field,
+  const mappedFields = Object.values(tool.gating.executionMapping).flatMap(m =>
+    typeof m === 'string' ? [m] : Array.isArray(m) ? m.map(e => e.field) : [m.field],
   );
   if (mappedFields.length > 0) {
     parts.push(`${mappedFields.join(', ')} checked`);

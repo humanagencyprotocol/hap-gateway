@@ -108,7 +108,7 @@ export async function addIntegration(config: unknown): Promise<unknown> {
 export async function activateIntegration(manifest: {
   id: string;
   name: string;
-  mcp: { command: string; args: string[] };
+  mcp: { command: string; args: string[]; env?: Record<string, string> };
   credentials: { envMapping: Record<string, string> };
   profile: string;
   toolGating?: unknown;
@@ -124,6 +124,7 @@ export async function activateIntegration(manifest: {
     name: manifest.name,
     command: manifest.mcp.command,
     args: manifest.mcp.args,
+    env: manifest.mcp.env,
     envKeys,
     profile: manifest.profile,
     toolGating: manifest.toolGating,
@@ -148,6 +149,15 @@ export async function removeIntegration(id: string): Promise<unknown> {
     const err = await res.json().catch(() => ({ error: 'Unknown error' }));
     throw new Error((err as { error: string }).error);
   }
+  return res.json();
+}
+
+export async function getGateContent(path?: string): Promise<unknown> {
+  const qs = path ? `?path=${encodeURIComponent(path)}` : '';
+  const res = await fetch(`${MCP_BASE}/internal/gate-content${qs}`, {
+    headers: internalHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to fetch gate content');
   return res.json();
 }
 

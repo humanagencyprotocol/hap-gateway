@@ -407,6 +407,17 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
+app.get('/internal/gate-content', internalOnly, (req: Request, res: Response) => {
+  const path = req.query.path as string | undefined;
+  const gates = state.gateStore.getAll();
+  if (path) {
+    const entry = gates.find(g => g.path === path);
+    res.json({ entry: entry ?? null });
+  } else {
+    res.json({ entries: gates });
+  }
+});
+
 app.get('/internal/manifests', internalOnly, (_req: Request, res: Response) => {
   res.json({ manifests: getAllManifests() });
 });

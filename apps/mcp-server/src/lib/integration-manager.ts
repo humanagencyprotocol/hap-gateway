@@ -75,7 +75,7 @@ export class IntegrationManager {
     const transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
-      env: { ...process.env, ...env } as Record<string, string>,
+      env: { ...process.env, ...config.env, ...env } as Record<string, string>,
     });
 
     // Create MCP client

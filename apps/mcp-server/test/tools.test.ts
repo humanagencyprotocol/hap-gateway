@@ -311,6 +311,91 @@ describe('createGatedToolHandler — SP receipt integration', () => {
 
 // ─── buildProxiedToolDescription — gating tags ──────────────────────────────
 
+// ─── Execution mapping transforms ─────────────────────────────────────────
+
+describe('createGatedToolHandler — mapping transforms', () => {
+  function mockEmailTool(): DiscoveredTool {
+    return {
+      originalName: 'send_message',
+      namespacedName: 'gmail__send_message',
+      integrationId: 'gmail',
+      description: 'Send an email',
+      inputSchema: {},
+      gating: {
+        profile: 'email',
+        executionMapping: {
+          to: [
+            { field: 'recipient_count', transform: 'length' },
+            { field: 'allowed_recipients', transform: 'join' },
+            { field: 'allowed_domains', transform: 'join_domains' },
+          ],
+        },
+        staticExecution: {},
+      },
+    };
+  }
+
+  it('length transform counts array items', async () => {
+    const state = mockGatedState();
+    const im = mockIntegrationManager();
+    // Override the tool to use email mapping
+    const tool = mockEmailTool();
+    // Patch profile to match
+    (state.getEnrichedAuthorizations()[0] as Record<string, unknown>).profileId = 'github.com/humanagencyprotocol/hap-profiles/email@0.4';
+    const handler = createGatedToolHandler(tool, im, state);
+
+    await handler({ to: ['alice@gmail.com', 'bob@acme.com'] });
+
+    const verifyCall = (state.gatekeeper as { verifyExecution: ReturnType<typeof vi.fn> }).verifyExecution;
+    const executionArg = verifyCall.mock.calls[0][1] as Record<string, unknown>;
+    expect(executionArg.recipient_count).toBe(2);
+  });
+
+  it('join transform joins array to comma-separated string', async () => {
+    const state = mockGatedState();
+    const im = mockIntegrationManager();
+    const tool = mockEmailTool();
+    (state.getEnrichedAuthorizations()[0] as Record<string, unknown>).profileId = 'github.com/humanagencyprotocol/hap-profiles/email@0.4';
+    const handler = createGatedToolHandler(tool, im, state);
+
+    await handler({ to: ['alice@gmail.com', 'bob@acme.com'] });
+
+    const verifyCall = (state.gatekeeper as { verifyExecution: ReturnType<typeof vi.fn> }).verifyExecution;
+    const executionArg = verifyCall.mock.calls[0][1] as Record<string, unknown>;
+    expect(executionArg.allowed_recipients).toBe('alice@gmail.com,bob@acme.com');
+  });
+
+  it('join_domains extracts domains, deduplicates, and sorts', async () => {
+    const state = mockGatedState();
+    const im = mockIntegrationManager();
+    const tool = mockEmailTool();
+    (state.getEnrichedAuthorizations()[0] as Record<string, unknown>).profileId = 'github.com/humanagencyprotocol/hap-profiles/email@0.4';
+    const handler = createGatedToolHandler(tool, im, state);
+
+    await handler({ to: ['alice@gmail.com', 'bob@acme.com', 'charlie@gmail.com'] });
+
+    const verifyCall = (state.gatekeeper as { verifyExecution: ReturnType<typeof vi.fn> }).verifyExecution;
+    const executionArg = verifyCall.mock.calls[0][1] as Record<string, unknown>;
+    expect(executionArg.allowed_domains).toBe('acme.com,gmail.com');
+  });
+
+  it('handles single string arg (non-array) with transforms', async () => {
+    const state = mockGatedState();
+    const im = mockIntegrationManager();
+    const tool = mockEmailTool();
+    (state.getEnrichedAuthorizations()[0] as Record<string, unknown>).profileId = 'github.com/humanagencyprotocol/hap-profiles/email@0.4';
+    const handler = createGatedToolHandler(tool, im, state);
+
+    await handler({ to: 'alice@gmail.com' });
+
+    const verifyCall = (state.gatekeeper as { verifyExecution: ReturnType<typeof vi.fn> }).verifyExecution;
+    const executionArg = verifyCall.mock.calls[0][1] as Record<string, unknown>;
+    expect(executionArg.recipient_count).toBe(1);
+    expect(executionArg.allowed_recipients).toBe('alice@gmail.com');
+    expect(executionArg.allowed_domains).toBe('gmail.com');
+  });
+});
+
 describe('buildProxiedToolDescription', () => {
   it('returns [HAP: no gating config] for tools with no gating', () => {
     const tool: DiscoveredTool = {

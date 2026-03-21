@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 const NAV_ITEMS = [
   { to: '/', icon: '\u25A1', label: 'Dashboard' },
   { to: '/agent/new', icon: '\u25C8', label: 'Authorize Agents' },
-  { to: '/audit', icon: '\u2630', label: 'Agent Receipts' },
+  { to: '/authorizations', icon: '\u2630', label: 'Authorizations' },
   { to: '/groups', icon: '\u25C9', label: 'Manage Groups' },
   { to: '/integrations', icon: '\u29D7', label: 'Integrations' },
   { to: '/settings', icon: '\u2699', label: 'Settings' },

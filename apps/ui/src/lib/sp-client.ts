@@ -127,7 +127,7 @@ export interface IntegrationManifest {
   description: string;
   icon: string;
   profile: string;
-  mcp: { command: string; args: string[] };
+  mcp: { command: string; args: string[]; env?: Record<string, string> };
   credentials: {
     fields: Array<{ key: string; label: string; type: 'text' | 'password'; placeholder?: string }>;
     envMapping: Record<string, string>;
@@ -150,6 +150,17 @@ export interface McpIntegrationStatus {
   running: boolean;
   toolCount: number;
   error?: string;
+}
+
+export interface GateContentEntry {
+  frameHash: string;
+  boundsHash?: string;
+  contextHash?: string;
+  path: string;
+  profileId: string;
+  gateContent: { problem: string; objective: string; tradeoffs: string };
+  context?: Record<string, string | number>;
+  storedAt: string;
 }
 
 export interface McpHealthResponse {
@@ -267,10 +278,10 @@ class SPClient {
     const data = await res.json();
     // Normalize mine response to PendingItem shape
     return (data.attestations ?? []).map((a: Record<string, unknown>) => ({
-      frame_hash: a.frameHash,
+      frame_hash: a.boundsHash ?? a.frameHash,
       profile_id: a.profileId,
       path: a.path,
-      frame: a.frame ?? {},
+      frame: a.bounds ?? a.frame ?? {},
       required_domains: a.requiredDomains ?? [],
       attested_domains: a.attestedDomains ?? [],
       missing_domains: (a.requiredDomains as string[] ?? []).filter(
@@ -284,6 +295,17 @@ class SPClient {
         ? Math.max(0, Math.min(...(a.attestations as Array<{expiresAt: number}>).map(att => att.expiresAt)) - Math.floor(Date.now() / 1000))
         : null,
     }));
+  }
+
+  async revokeAttestation(frameHash: string, reason?: string): Promise<void> {
+    const res = await this.fetch(`/api/attestations/${encodeURIComponent(frameHash)}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? 'Revoked by user' }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to revoke' }));
+      throw new Error(err.error || `Revoke failed: ${res.status}`);
+    }
   }
 
   async getAttestations(frameHash: string): Promise<AttestationsResult> {
@@ -495,6 +517,13 @@ class SPClient {
   }
 
   // ─── Gate Content ───────────────────────────────────────────────────────
+
+  async getGateContent(path: string): Promise<GateContentEntry | null> {
+    const res = await this.fetch(`/gate-content?path=${encodeURIComponent(path)}`);
+    if (!res.ok) throw new Error(`Failed to fetch gate content: ${res.status}`);
+    const data = await res.json();
+    return data.entry ?? null;
+  }
 
   async pushGateContent(data: {
     frameHash?: string;     // v0.3

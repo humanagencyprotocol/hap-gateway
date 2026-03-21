@@ -40,6 +40,7 @@ export interface IntegrationManifest {
   mcp: {
     command: string;
     args: string[];
+    env?: Record<string, string>;
   };
   credentials: {
     fields: ManifestCredentialField[];

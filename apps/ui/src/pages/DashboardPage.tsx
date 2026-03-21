@@ -175,7 +175,7 @@ export function DashboardPage() {
           <div className="dashboard-section">
             <div className="section-header">
               <h3 className="section-title">Recent Attestations</h3>
-              <Link to="/audit" className="btn btn-ghost btn-sm">View all</Link>
+              <Link to="/authorizations" className="btn btn-ghost btn-sm">View all</Link>
             </div>
           </div>
         </>

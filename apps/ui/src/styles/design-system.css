@@ -596,6 +596,7 @@ code {
 .status-active { background: var(--accent-subtle); color: var(--accent); }
 .status-pending { background: var(--danger-subtle); color: var(--danger); }
 .status-expired { background: var(--bg-elevated); color: var(--text-tertiary); }
+.status-revoked { background: var(--danger-subtle); color: var(--danger); }
 
 .domain-badge {
   display: inline-block;

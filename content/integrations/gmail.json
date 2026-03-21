@@ -7,7 +7,8 @@
   "profile": "email",
   "mcp": {
     "command": "npx",
-    "args": ["-y", "@shinzolabs/gmail-mcp@latest"]
+    "args": ["-y", "@shinzolabs/gmail-mcp@latest"],
+    "env": { "PORT": "0" }
   },
   "credentials": {
     "fields": [
@@ -39,13 +40,21 @@
     "overrides": {
       "send_message": {
         "executionMapping": {
-          "to": "recipient_count"
+          "to": [
+            { "field": "recipient_count", "transform": "length" },
+            { "field": "allowed_recipients", "transform": "join" },
+            { "field": "allowed_domains", "transform": "join_domains" }
+          ]
         },
         "staticExecution": {}
       },
       "create_draft": {
         "executionMapping": {
-          "to": "recipient_count"
+          "to": [
+            { "field": "recipient_count", "transform": "length" },
+            { "field": "allowed_recipients", "transform": "join" },
+            { "field": "allowed_domains", "transform": "join_domains" }
+          ]
         },
         "staticExecution": {}
       },
