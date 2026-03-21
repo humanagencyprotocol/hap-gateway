@@ -6,13 +6,12 @@ import { StatusBadge } from '../components/StatusBadge';
 import { DomainBadge } from '../components/DomainBadge';
 import { EmptyState } from '../components/EmptyState';
 
-type FilterTab = 'all' | 'agent' | 'deploy';
+// TODO: Add search/filter bar (see UX proposal)
 
 export function AuditPage() {
   const { activeDomain } = useAuth();
   const [items, setItems] = useState<PendingItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   useEffect(() => {
     if (!activeDomain) { setLoading(false); return; }
@@ -21,12 +20,6 @@ export function AuditPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [activeDomain]);
-
-  const filteredItems = items.filter(item => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'deploy') return item.profile_id.includes('deploy');
-    return !item.profile_id.includes('deploy');
-  });
 
   const getStatus = (item: PendingItem): 'active' | 'pending' | 'expired' => {
     if (item.remaining_seconds !== null && item.remaining_seconds <= 0) return 'expired';
@@ -41,22 +34,9 @@ export function AuditPage() {
         <p className="page-subtitle">Authorization and attestation history.</p>
       </div>
 
-      {/* Filter tabs */}
-      <div className="nav-tabs">
-        {(['all', 'agent', 'deploy'] as const).map(tab => (
-          <button
-            key={tab}
-            className={`nav-tab${activeTab === tab ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
-
       {loading ? (
         <p style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
-      ) : filteredItems.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState
           icon={'\u2630'}
           title="No audit events"
@@ -64,7 +44,7 @@ export function AuditPage() {
         />
       ) : (
         <div className="timeline">
-          {filteredItems.map(item => {
+          {items.map(item => {
             const status = getStatus(item);
             return (
               <div className={`timeline-event${status === 'expired' ? ' expired' : ''}`} key={item.frame_hash}>

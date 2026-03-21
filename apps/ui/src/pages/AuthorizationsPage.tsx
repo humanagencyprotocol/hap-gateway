@@ -7,7 +7,7 @@ import { TTLBadge } from '../components/TTLBadge';
 import { EmptyState } from '../components/EmptyState';
 import { ExtendAuthModal } from '../components/ExtendAuthModal';
 
-type StatusFilter = 'all' | 'active' | 'pending' | 'expired' | 'revoked';
+type StatusFilter = 'active' | 'pending' | 'expired' | 'revoked';
 type Status = 'active' | 'pending' | 'expired' | 'revoked';
 
 function getStatus(item: PendingItem, revokedSet: Set<string>): Status {
@@ -38,7 +38,7 @@ function sortItems(items: PendingItem[], revokedSet: Set<string>): PendingItem[]
 export function AuthorizationsPage() {
   const [items, setItems] = useState<PendingItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
+  const [activeFilter, setActiveFilter] = useState<StatusFilter>('active');
   const [expandedHash, setExpandedHash] = useState<string | null>(null);
   const [gateCache, setGateCache] = useState<Record<string, GateContentEntry | null>>({});
   const [gateLoading, setGateLoading] = useState<string | null>(null);
@@ -105,7 +105,6 @@ export function AuthorizationsPage() {
   };
 
   const counts = {
-    all: items.length,
     active: items.filter(i => getStatus(i, revokedSet) === 'active').length,
     pending: items.filter(i => getStatus(i, revokedSet) === 'pending').length,
     expired: items.filter(i => getStatus(i, revokedSet) === 'expired').length,
@@ -113,7 +112,7 @@ export function AuthorizationsPage() {
   };
 
   const filtered = sortItems(
-    items.filter(i => activeFilter === 'all' || getStatus(i, revokedSet) === activeFilter),
+    items.filter(i => getStatus(i, revokedSet) === activeFilter),
     revokedSet,
   );
 
@@ -129,7 +128,7 @@ export function AuthorizationsPage() {
 
       {/* Filter tabs */}
       <div className="nav-tabs">
-        {(['all', 'active', 'pending', 'expired', 'revoked'] as const).map(tab => (
+        {(['active', 'pending', 'expired', 'revoked'] as const).map(tab => (
           <button
             key={tab}
             className={`nav-tab${activeFilter === tab ? ' active' : ''}`}
