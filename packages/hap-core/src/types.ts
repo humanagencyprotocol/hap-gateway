@@ -71,6 +71,8 @@ export interface ProfileBoundsField {
   type: 'string' | 'number';
   required: boolean;
   description?: string;
+  displayName?: string;
+  format?: 'email' | 'domain' | 'url' | 'currency';
   constraint?: FieldConstraint;
   enum?: string[];
 }
@@ -82,6 +84,8 @@ export interface ProfileContextField {
   type: 'string' | 'number';
   required: boolean;
   description?: string;
+  displayName?: string;
+  format?: 'email' | 'domain' | 'url' | 'currency';
   constraint?: FieldConstraint;
   enum?: string[];
 }
@@ -149,6 +153,7 @@ export interface ExecutionPath {
  */
 export interface AgentProfile {
   id: string;
+  name?: string;
   version: string;
   description: string;
 
