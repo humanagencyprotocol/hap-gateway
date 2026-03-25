@@ -1,6 +1,6 @@
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 
-const UPDATE_CMD = 'docker rm -f hap-gateway && docker pull ghcr.io/humanagencyprotocol/hap-gateway:latest && docker run -d --name hap-gateway -p 3000:3000 -p 3030:3030 -v $HOME/.hap:/app/data ghcr.io/humanagencyprotocol/hap-gateway';
+const UPDATE_CMD = 'docker rm -f hap-gateway && docker pull ghcr.io/humanagencyprotocol/hap-gateway:latest && docker run -d --name hap-gateway -p 7400:3000 -p 7430:3030 -v $HOME/.hap:/app/data ghcr.io/humanagencyprotocol/hap-gateway';
 
 export function UpdateBanner() {
   const { updateAvailable, dismiss } = useUpdateCheck();
