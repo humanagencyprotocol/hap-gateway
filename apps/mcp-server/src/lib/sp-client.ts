@@ -15,7 +15,7 @@ export interface SPAttestationsResult {
   frame_hash: string;
   bounds_hash?: string;   // v0.4
   context_hash?: string;  // v0.4
-  attestations: SPAttestationResponse[];
+  attestations: (SPAttestationResponse & { commitment?: string })[];
   complete: boolean;
   frame?: Record<string, string | number>;
   bounds?: Record<string, string | number>;  // v0.4
@@ -23,6 +23,24 @@ export interface SPAttestationsResult {
   path?: string;
   required_domains?: string[];
   attested_domains?: string[];
+  deferred_commitment_domains?: string[];
+}
+
+export interface SPProposal {
+  id: string;
+  frameHash: string;
+  profileId: string;
+  path: string;
+  pendingDomains: string[];
+  committedBy: Record<string, { userId: string; at: number }>;
+  rejectedBy: { domain: string; userId: string; at: number } | null;
+  tool: string;
+  toolArgs: Record<string, unknown>;
+  executionContext: Record<string, string | number>;
+  status: 'pending' | 'committed' | 'rejected' | 'expired' | 'executed';
+  executionResult: unknown | null;
+  createdAt: number;
+  expiresAt: number;
 }
 
 export interface SPPendingItem {
@@ -134,5 +152,70 @@ export class SPClient {
       throw new SPReceiptError(error, res.status, body);
     }
     return res.json() as Promise<{ receipt: Record<string, unknown> }>;
+  }
+
+  /**
+   * Submit a proposal for deferred commitment review.
+   */
+  async submitProposal(data: {
+    frameHash: string;
+    profileId: string;
+    path: string;
+    pendingDomains: string[];
+    tool: string;
+    toolArgs: Record<string, unknown>;
+    executionContext: Record<string, string | number>;
+  }): Promise<{ proposal: SPProposal }> {
+    const res = await this.fetch('/api/proposals', {
+      method: 'POST',
+      body: JSON.stringify({
+        frame_hash: data.frameHash,
+        profile_id: data.profileId,
+        path: data.path,
+        pending_domains: data.pendingDomains,
+        tool: data.tool,
+        tool_args: data.toolArgs,
+        execution_context: data.executionContext,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      throw new Error((body.error as string) ?? `SP proposal submission failed: ${res.status}`);
+    }
+    return res.json() as Promise<{ proposal: SPProposal }>;
+  }
+
+  /**
+   * Get pending proposals for a domain.
+   */
+  async getProposals(domain: string): Promise<SPProposal[]> {
+    const res = await this.fetch(`/api/proposals?domain=${encodeURIComponent(domain)}`);
+    if (!res.ok) throw new Error(`SP proposals request failed: ${res.status}`);
+    const data = await res.json() as { proposals: SPProposal[] };
+    return data.proposals;
+  }
+
+  /**
+   * Get proposals that have been fully committed and are ready for execution.
+   */
+  async getCommittedProposals(): Promise<SPProposal[]> {
+    const res = await this.fetch('/api/proposals?status=committed');
+    if (!res.ok) throw new Error(`SP committed proposals request failed: ${res.status}`);
+    const data = await res.json() as { proposals: SPProposal[] };
+    return data.proposals;
+  }
+
+  /**
+   * Update a proposal's status (e.g., after execution).
+   */
+  async updateProposalStatus(id: string, status: string, result?: unknown): Promise<void> {
+    const res = await this.fetch(`/api/proposals/${encodeURIComponent(id)}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ action: status, execution_result: result }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      throw new Error((body.error as string) ?? `SP proposal update failed: ${res.status}`);
+    }
   }
 }

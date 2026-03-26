@@ -162,6 +162,34 @@ export function createGatedToolHandler(
       });
 
       if (result.approved) {
+        // Check for deferred commitment domains — submit proposal instead of executing
+        if (auth.deferredCommitmentDomains.length > 0) {
+          try {
+            const { proposal } = await state.spClient.submitProposal({
+              frameHash: auth.boundsHash ?? auth.frameHash,
+              profileId: auth.profileId,
+              path: auth.path,
+              pendingDomains: auth.deferredCommitmentDomains,
+              tool: tool.namespacedName,
+              toolArgs: args,
+              executionContext: { ...execution },
+            });
+            return {
+              content: [{
+                type: 'text',
+                text: `Awaiting commitment from domain${auth.deferredCommitmentDomains.length > 1 ? 's' : ''} ` +
+                  `"${auth.deferredCommitmentDomains.join('", "')}" for tool ${tool.originalName}.\n` +
+                  `Proposal ID: ${proposal.id}. Check status with check-pending-commitments(proposal_id: "${proposal.id}").`,
+              }],
+            };
+          } catch (err) {
+            return {
+              content: [{ type: 'text', text: `Failed to submit proposal: ${err instanceof Error ? err.message : String(err)}` }],
+              isError: true,
+            };
+          }
+        }
+
         // Request receipt from SP (pre-flight — fail closed)
         try {
           await state.spClient.postReceipt({

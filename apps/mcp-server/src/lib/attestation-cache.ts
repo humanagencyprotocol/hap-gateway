@@ -18,6 +18,7 @@ export interface CachedAuthorization {
   attestations: Array<{ domain: string; blob: string; expiresAt: number }>;
   requiredDomains: string[];
   attestedDomains: string[];
+  deferredCommitmentDomains: string[];
   complete: boolean;
 }
 
@@ -91,6 +92,7 @@ export class AttestationCache {
       })),
       requiredDomains: result.required_domains ?? [],
       attestedDomains: result.attested_domains ?? [],
+      deferredCommitmentDomains: result.deferred_commitment_domains ?? [],
       complete: result.complete,
     };
 

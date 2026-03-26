@@ -16,6 +16,7 @@ import { buildMandateBrief } from './lib/mandate-brief';
 import { listAuthorizationsHandler } from './tools/authorizations';
 import { checkPendingHandler } from './tools/pending';
 import { listIntegrationsHandler } from './tools/integrations';
+import { checkPendingCommitmentsHandler } from './tools/commitments';
 import type { IntegrationManager, DiscoveredTool } from './lib/integration-manager';
 import { createGatedToolHandler, buildProxiedToolDescription, profileMatches } from './lib/tool-proxy';
 
@@ -127,6 +128,19 @@ export function createMcpServer(
       inputSchema: {},
     },
     listIntegrationsHandler(state, integrationManager)
+  );
+
+  // ─── check-pending-commitments ─────────────────────────────────────────
+
+  server.registerTool(
+    'check-pending-commitments',
+    {
+      description: 'Check status of pending proposals awaiting domain owner commitment. Call with a proposal_id to check a specific proposal, or without to see all.',
+      inputSchema: {
+        proposal_id: z.string().optional().describe('Specific proposal ID to check. Omit to see all.'),
+      },
+    },
+    checkPendingCommitmentsHandler(state)
   );
 
   // ─── Proxied tools from downstream integrations ──────────────────────────
