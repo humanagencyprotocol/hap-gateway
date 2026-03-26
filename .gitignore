@@ -6,3 +6,4 @@ dist/
 # Playwright
 test-results/
 playwright-report/
+profiles/

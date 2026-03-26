@@ -28,6 +28,9 @@ COPY --from=build /build/apps/ apps/
 # Copy integration manifests
 COPY content/integrations/ content/integrations/
 
+# Copy profiles (fetched from sibling hap-profiles repo at build time)
+COPY profiles/ /hap-profiles/
+
 # Create data directory for gate store
 RUN mkdir -p /app/data
 
@@ -46,6 +49,7 @@ ENV HAP_CP_PORT=3000
 ENV HAP_MCP_PORT=3030
 ENV HAP_MCP_INTERNAL_URL=http://127.0.0.1:3030
 ENV HAP_INTEGRATIONS_DIR=/app/content/integrations
+ENV HAP_PROFILES_DIR=/hap-profiles
 ENV NODE_ENV=production
 
 EXPOSE 3000 3030
