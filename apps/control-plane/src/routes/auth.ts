@@ -59,7 +59,7 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
       // Derive vault encryption key from API key
       vault.deriveAndSetKey(apiKey);
 
-      // Push session cookie + vault key to MCP server
+      // Push session cookie + vault key to MCP server (must complete before responding)
       if (sessionCookie) {
         try {
           await configure(sessionCookie, vault.getVaultKeyHex());
@@ -68,34 +68,32 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
         }
       }
 
-      // Re-push all stored service credentials to MCP server
-      // (needed after MCP server restart — credentials are in-memory only)
-      for (const credId of vault.listCredentials()) {
-        try {
-          const creds = vault.getCredential(credId);
-          if (creds) {
-            await pushServiceCredentials(credId, creds);
-            console.error(`[Control Plane] Pushed ${credId} credentials to MCP`);
-          }
-        } catch (err) {
-          console.error(`[Control Plane] Failed to push ${credId} credentials:`, err);
-        }
-      }
-
-      // Re-sync stored gate content with SP attestations
-      // (attestation cache is in-memory, lost on MCP server restart)
-      try {
-        const { synced } = await resyncGates();
-        if (synced > 0) {
-          console.error(`[Control Plane] Re-synced ${synced} gate(s) with SP`);
-        }
-      } catch (err) {
-        console.error('[Control Plane] Failed to re-sync gates:', err);
-      }
-
-      // Return user data — NO Set-Cookie headers
+      // Return user data immediately — don't block on credential sync
       const data = await spRes.json();
       res.json(data);
+
+      // Background: re-push credentials and re-sync gates (non-blocking)
+      (async () => {
+        for (const credId of vault.listCredentials()) {
+          try {
+            const creds = vault.getCredential(credId);
+            if (creds) {
+              await pushServiceCredentials(credId, creds);
+              console.error(`[Control Plane] Pushed ${credId} credentials to MCP`);
+            }
+          } catch (err) {
+            console.error(`[Control Plane] Failed to push ${credId} credentials:`, err);
+          }
+        }
+        try {
+          const { synced } = await resyncGates();
+          if (synced > 0) {
+            console.error(`[Control Plane] Re-synced ${synced} gate(s) with SP`);
+          }
+        } catch (err) {
+          console.error('[Control Plane] Failed to re-sync gates:', err);
+        }
+      })().catch(() => {});
     } catch (err) {
       console.error('[Control Plane] Login error:', err);
       res.status(500).json({ error: 'Login failed' });
