@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { to: '/authorizations', icon: '\u2630', label: 'Agent Authorizations' },
   { to: '/audit', icon: '\u25A3', label: 'Agent Receipts' },
   { to: '/groups', icon: '\u25C9', label: 'Manage Groups' },
+  { to: '/proposals', icon: '\u25B7', label: 'Proposals' },
   { to: '/integrations', icon: '\u29D7', label: 'Integrations' },
   { to: '/settings', icon: '\u2699', label: 'AI Assistant' },
 ];

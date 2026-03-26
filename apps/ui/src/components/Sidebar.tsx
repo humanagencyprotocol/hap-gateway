@@ -16,20 +16,23 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/authorizations', icon: '\u2630', label: 'Agent Authorizations', statusKey: 'authorizations' },
   { to: '/audit', icon: '\u25A3', label: 'Agent Receipts' },
   { to: '/groups', icon: '\u25C9', label: 'Manage Groups' },
+  { to: '/proposals', icon: '\u25B7', label: 'Proposals', statusKey: 'proposals' },
   { to: '/integrations', icon: '\u29D7', label: 'Integrations', statusKey: 'integrations' },
   { to: '/settings', icon: '\u2699', label: 'AI Assistant', statusKey: 'assistant' },
 ];
 
 function useNavStatus() {
+  const { activeDomain } = useAuth();
   const [statuses, setStatuses] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     async function poll() {
       try {
-        const [intData, healthData, authData] = await Promise.all([
+        const [intData, healthData, authData, proposalData] = await Promise.all([
           spClient.getMcpIntegrations().catch(() => null),
           spClient.getMcpHealth().catch(() => null),
           spClient.getMyAttestations().catch(() => null),
+          spClient.getProposals(activeDomain || 'owner').catch(() => null),
         ]);
 
         const next: Record<string, boolean> = {};
@@ -59,6 +62,11 @@ function useNavStatus() {
           }
         }
 
+        // Proposals: warn if any pending
+        if (proposalData && proposalData.length > 0) {
+          next.proposals = true;
+        }
+
         setStatuses(next);
       } catch {
         // Ignore errors
@@ -68,7 +76,7 @@ function useNavStatus() {
     poll();
     const interval = setInterval(poll, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeDomain]);
 
   return statuses;
 }

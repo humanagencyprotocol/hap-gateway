@@ -164,6 +164,23 @@ export interface GateContentEntry {
   storedAt: string;
 }
 
+export interface Proposal {
+  id: string;
+  frameHash: string;
+  profileId: string;
+  path: string;
+  pendingDomains: string[];
+  committedBy: Record<string, { userId: string; at: number }>;
+  rejectedBy: { domain: string; userId: string; at: number } | null;
+  tool: string;
+  toolArgs: Record<string, unknown>;
+  executionContext: Record<string, string | number>;
+  status: 'pending' | 'committed' | 'rejected' | 'expired' | 'executed';
+  executionResult: unknown | null;
+  createdAt: number;
+  expiresAt: number;
+}
+
 export interface ExecutionReceipt {
   id: string;
   groupId: string;
@@ -546,6 +563,27 @@ class SPClient {
   async removeMcpIntegration(id: string): Promise<void> {
     const res = await this.fetch(`/mcp/integrations/${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`Failed to remove integration: ${res.status}`);
+  }
+
+  // ─── Proposals ──────────────────────────────────────────────────────────
+
+  async getProposals(domain: string): Promise<Proposal[]> {
+    const res = await this.fetch(`/api/proposals?domain=${encodeURIComponent(domain)}`);
+    if (!res.ok) throw new Error(`Failed to fetch proposals: ${res.status}`);
+    const data = await res.json();
+    return data.proposals ?? [];
+  }
+
+  async resolveProposal(id: string, action: 'commit' | 'reject', domain: string): Promise<{ status: string }> {
+    const res = await this.fetch(`/api/proposals/${encodeURIComponent(id)}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ action, domain }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed' }));
+      throw new Error(err.error || `Failed: ${res.status}`);
+    }
+    return res.json();
   }
 
   // ─── Gate Content ───────────────────────────────────────────────────────
