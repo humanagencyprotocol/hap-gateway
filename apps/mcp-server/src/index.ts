@@ -15,6 +15,7 @@ import { SharedState } from './lib/shared-state';
 import { buildMandateBrief } from './lib/mandate-brief';
 import { listAuthorizationsHandler } from './tools/authorizations';
 import { checkPendingHandler } from './tools/pending';
+import { listIntegrationsHandler } from './tools/integrations';
 import type { IntegrationManager, DiscoveredTool } from './lib/integration-manager';
 import { createGatedToolHandler, buildProxiedToolDescription, profileMatches } from './lib/tool-proxy';
 
@@ -115,6 +116,17 @@ export function createMcpServer(
       },
     },
     checkPendingHandler(cache)
+  );
+
+  // ─── list-integrations ─────────────────────────────────────────────────
+
+  server.registerTool(
+    'list-integrations',
+    {
+      description: 'List all running integrations and their authorization status. Returns a compact overview — use list-authorizations(domain) for full details on a specific profile.',
+      inputSchema: {},
+    },
+    listIntegrationsHandler(state, integrationManager)
   );
 
   // ─── Proxied tools from downstream integrations ──────────────────────────
