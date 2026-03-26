@@ -636,7 +636,7 @@ code {
   gap: 0;
 }
 
-.step { display: flex; align-items: center; }
+.step { display: flex; align-items: center; position: relative; }
 
 .step-circle {
   width: 2rem;
@@ -671,7 +671,8 @@ code {
   width: 2rem;
   height: 2px;
   background: var(--border);
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0.5rem;
 }
 
 .step-line.completed { background: var(--accent); }
@@ -1675,6 +1676,7 @@ code {
   .quick-actions { grid-template-columns: 1fr; }
   .selection-grid { grid-template-columns: 1fr; }
   .nav-actions-desktop { display: none; }
+  .step-label-text { display: none; }
   .mobile-menu-btn { display: flex; }
   .mobile-menu-backdrop { display: block; }
   .mobile-menu-panel { display: flex; }
