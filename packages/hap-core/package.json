@@ -1,8 +1,8 @@
 {
   "name": "@hap/core",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "HAP Core - Protocol types, frame canonicalization, attestation verification, Gatekeeper",
+  "description": "Thin wrapper — re-exports @humanagencyp/hap-core from npm",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -14,18 +14,13 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "build": "tsup src/index.ts --format cjs,esm --dts"
   },
   "dependencies": {
-    "@noble/ed25519": "^2.1.0"
+    "@humanagencyp/hap-core": "^0.4.0"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.3.0",
-    "vitest": "^1.0.0"
+    "typescript": "^5.3.0"
   }
 }

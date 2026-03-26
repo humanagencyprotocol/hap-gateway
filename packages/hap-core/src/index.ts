@@ -1,11 +1,6 @@
 /**
- * HAP Core — Agent Demo
- *
- * Shared protocol logic for agent-oriented bounded execution.
+ * Re-export everything from the published npm package.
+ * This thin wrapper keeps the workspace alias @hap/core working
+ * so existing imports across the gateway apps don't need to change.
  */
-
-export * from './types';
-export * from './frame';
-export * from './attestation';
-export * from './gatekeeper';
-export * from './profiles';
+export * from '@humanagencyp/hap-core';
