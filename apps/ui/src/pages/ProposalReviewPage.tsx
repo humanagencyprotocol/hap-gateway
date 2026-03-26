@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { spClient, type Proposal } from '../lib/sp-client';
 
 export function ProposalReviewPage() {
-  const { activeDomain } = useAuth();
+  const { domain } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState<string | null>(null);
@@ -11,7 +11,6 @@ export function ProposalReviewPage() {
 
   const fetchProposals = useCallback(async () => {
     try {
-      const domain = activeDomain || 'owner';
       const items = await spClient.getProposals(domain);
       setProposals(items);
     } catch {
@@ -19,7 +18,7 @@ export function ProposalReviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeDomain]);
+  }, [domain]);
 
   useEffect(() => {
     fetchProposals();
@@ -31,7 +30,7 @@ export function ProposalReviewPage() {
     setResolving(id);
     setMessage('');
     try {
-      const domain = activeDomain || 'owner';
+      const domain = domain || 'owner';
       const result = await spClient.resolveProposal(id, action, domain);
       if (action === 'commit') {
         setMessage(`Proposal committed. Status: ${result.status}`);
