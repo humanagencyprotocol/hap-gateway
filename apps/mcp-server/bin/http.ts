@@ -511,4 +511,66 @@ app.listen(port, '0.0.0.0', () => {
       console.error(`[HAP MCP] Restored ${running.length} integration(s): ${running.map(s => s.id).join(', ')}`);
     }
   });
+
+  // ─── Auto-execution loop for committed proposals ────────────────────────
+  // Polls SP every 5 seconds for proposals that all domains have committed.
+  // When found, executes the stored tool call and updates the proposal.
+
+  const PROPOSAL_POLL_INTERVAL = 5_000;
+
+  async function executeCommittedProposals(): Promise<void> {
+    try {
+      const committed = await state.spClient.getCommittedProposals();
+      for (const proposal of committed) {
+        try {
+          // Parse tool name: "integration___toolName" → { integrationId, toolName }
+          const parts = proposal.tool.split('___');
+          if (parts.length !== 2) {
+            console.error(`[HAP MCP] Invalid tool name in proposal ${proposal.id}: ${proposal.tool}`);
+            continue;
+          }
+          const [integrationId, toolName] = parts;
+
+          // Execute the tool
+          const result = await integrationManager.callTool(integrationId, toolName, proposal.toolArgs);
+
+          // Post receipt to SP
+          try {
+            await state.spClient.postReceipt({
+              attestationHash: proposal.frameHash,
+              profileId: proposal.profileId,
+              path: proposal.path,
+              action: toolName,
+              executionContext: proposal.executionContext,
+            });
+          } catch (err) {
+            console.error(`[HAP MCP] Receipt failed for proposal ${proposal.id}:`, err);
+          }
+
+          // Record in execution log
+          state.executionLog.record({
+            profileId: proposal.profileId,
+            path: proposal.path,
+            execution: proposal.executionContext,
+            timestamp: Math.floor(Date.now() / 1000),
+          });
+
+          // Update proposal status to executed
+          try {
+            await state.spClient.updateProposalStatus(proposal.id, 'executed', result);
+          } catch {
+            // Best-effort status update
+          }
+
+          console.error(`[HAP MCP] Auto-executed proposal ${proposal.id}: ${proposal.tool}`);
+        } catch (err) {
+          console.error(`[HAP MCP] Failed to execute proposal ${proposal.id}:`, err);
+        }
+      }
+    } catch {
+      // SP unreachable or no session — skip this cycle
+    }
+  }
+
+  setInterval(executeCommittedProposals, PROPOSAL_POLL_INTERVAL);
 });
