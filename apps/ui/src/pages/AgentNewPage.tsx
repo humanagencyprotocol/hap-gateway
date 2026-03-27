@@ -77,8 +77,6 @@ export function AgentNewPage() {
         <p className="page-subtitle">Select what your agent is allowed to do, define the bounds, then attest.</p>
       </div>
 
-      <GroupSelector />
-
       {loading ? (
         <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>Loading profiles...</p>
       ) : profiles.length === 0 ? (

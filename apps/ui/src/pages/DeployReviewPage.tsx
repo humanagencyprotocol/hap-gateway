@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { spClient, type GitHubRepo, type GitHubPull, type GitHubPullDetail, type GitHubPullFile } from '../lib/sp-client';
 import { StepIndicator } from '../components/StepIndicator';
-import { GroupSelector } from '../components/GroupSelector';
 import { DomainBadge } from '../components/DomainBadge';
 import DiffViewer from '../components/DiffViewer';
 
@@ -189,8 +188,6 @@ export function DeployReviewPage() {
         <h1 className="page-title">Deploy Review</h1>
         <p className="page-subtitle">Attest a pull request through the HAP gate flow.</p>
       </div>
-
-      <GroupSelector />
 
       {/* Setup guide */}
       <details style={{ marginBottom: '1.5rem' }}>
