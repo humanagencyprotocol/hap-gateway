@@ -1,95 +1,77 @@
 # HAP Agent Gateway
 
-The local runtime for the [Human Agency Protocol](https://humanagencyprotocol.org). It sits between AI agents and real-world tools — payments, email, deployments, infrastructure — enforcing cryptographically signed, human-defined bounds on every action.
+Part of [humanagencyprotocol.com](https://humanagencyprotocol.com) — the first service applying the [Human Agency Protocol](https://humanagencyprotocol.org).
 
-The gateway connects to the HAP Service Provider at [humanagencyprotocol.com](https://humanagencyprotocol.com) for attestation signing, domain management, and audit trails.
+AI systems are probabilistic — flexible, adaptive, powerful. Real-world actions are deterministic — irreversible, accountable. You can't safely let a probabilistic system directly control deterministic consequences.
 
-> **Alpha (v0.1.0-alpha)** — Under active development. APIs and behavior may change without notice. Use at your own risk.
+HAP separates intelligence from authority and enforces that boundary at execution. Let AI think freely. Only let it act within explicitly authorized human bounds.
+
+The gateway is where that boundary is enforced. It sits between AI agents and real-world tools — payments, email, CRM, deployments, infrastructure — and verifies every action against cryptographic proof of human authorization. Planning is unrestricted. Execution is strictly enforced.
+
+The result: more AI capability does not mean more risk. Organizations can safely grant agents real authority over consequential actions — because the bounds hold.
+
+> **Alpha (v0.1.0-alpha)** — Under active development.
+
+---
+
+## Two Modes of Commitment
+
+A human creates an authorization by defining bounds and articulating the problem, objective, and accepted tradeoffs. The Service Provider at [humanagencyprotocol.com](https://humanagencyprotocol.com) signs the attestation. How the agent then operates depends on the commitment mode:
+
+**Fully committed** — The human commits to specific bounds upfront: max amounts, allowed actions, time windows. The agent executes autonomously within those bounds. On every tool call, the Gatekeeper verifies the action falls within the attested bounds and the SP issues a signed receipt. No per-action human approval needed. One authorization, many actions, each individually proven.
+
+**Committed per action** — The human defines bounds but defers full commitment. When the agent proposes an action, it becomes a proposal that the human reviews in the gateway UI — seeing exactly which tool, which arguments, which execution context. The human commits or rejects. Only after all required domain owners commit does execution proceed.
+
+Both modes are bounded. Both produce receipts. Both create a full audit trail. The difference is delegation depth — whether the human trusts the bounds enough for autonomous execution, or wants to review each action the agent proposes.
 
 ---
 
 ## How It Works
 
 ```
-Human (Browser)                       AI Agent (Claude, etc.)
-      |                                       |
-      | 1. Create authorization                |
-      |    (bounds, gates, sign)               |
-      v                                        |
-+--------------+  proxy  +--------------+      |
-| Admin        |<------->| External SP  |      |
-| :3400        | /api/*  |              |      |
-|              |         | Signs with   |      |
-| - Auth       |         | Ed25519 key  |      |
-| - UI         |         +--------------+      |
-| - Vault      |                               |
-| - Gate       |-- /internal/* --+             |
-|   content    |  (loopback only)|             |
-+--------------+                 v             |
-                          +--------------+     |
-                          | MCP Gateway  |<----+
-                          | :3430        | 2. Call tool
-                          |              |    (make-payment,
-                          | - Gatekeeper |     send-email)
-                          | - Tools      |
-                          | - Cache      | 3. Gatekeeper
-                          | - Gate store |    verifies bounds
-                          +--------------+    -> approve/reject
+Human                                 AI Agent
+  |                                       |
+  | 1. Define bounds,                     |
+  |    articulate direction,              |
+  |    commit (or defer)                  |
+  v                                       |
+Service Provider                          |
+  | 2. Sign attestation (Ed25519)         |
+  v                                       |
+Gateway                                   |
+  |              3. Connect via MCP ----->|
+  |              4. Tool call <-----------|
+  |                                       |
+  | 5. Fully committed:                   |
+  |    Gatekeeper verifies bounds         |
+  |    -> receipt issued, execute         |
+  |                                       |
+  |    Deferred commitment:               |
+  |    -> proposal created                |
+  |    -> human reviews in UI             |
+  |    -> commit or reject                |
+  |    -> execute on commit               |
 ```
 
-A human creates an authorization through a structured gate flow — defining bounds, articulating the problem, objective, and tradeoffs. The SP signs it. The agent connects via MCP and sees only the tools it's authorized to use. On every tool call, the Gatekeeper verifies the signature, checks TTL, confirms domain coverage, and enforces bounds. Only then does execution proceed.
+The agent never holds credentials or signing authority. It is a bounded executor of human decisions — high autonomy without losing accountability.
 
 ---
 
 ## What the Agent Sees
 
-The gateway uses a two-tier context model to give agents exactly the information they need without wasting context tokens.
-
-### Tier 1: Mandate Brief (always loaded)
-
-When an agent connects, the MCP `instructions` field contains a compact brief:
+When an agent connects, it receives a compact authority brief — active authorizations with bounds, live consumption, and available tools:
 
 ```
-You are an agent operating under the Human Agency Protocol (HAP).
-You have bounded authorities granted by human decision owners.
-
 === ACTIVE AUTHORITIES ===
 
-[spend-routine] spend@0.3 (45 min remaining)
-  Bounds: amount_max: 100, currency: USD, action_type: charge, ...
+[spend-routine] charge@0.4 (45 min remaining)
+  Bounds: amount_max: 100, currency: USD, action_type: charge
   Usage: $234/$500 daily, $1280/$5000 monthly, 8/20 tx
   Problem: Enable automated purchasing for business operations.
-  4 gated tools, 19 read-only — call list-authorizations(domain: "spend") for details
-
-When you receive a task, call list-authorizations(domain) for full details.
+  4 gated tools, 19 read-only
 ```
 
-Each tool also has a short gating tag in its description: `[HAP: spend — charge, amount checked]`, `[HAP: ungated]`, or `[HAP: spend — no active authorization]`.
-
-### Tier 2: list-authorizations (on demand)
-
-When the agent receives a task, it calls `list-authorizations(domain: "spend")` to load full detail for that domain only:
-
-- **Bounds** with all frame parameters
-- **Live consumption** — daily/monthly spend and transaction counts from the execution log
-- **Gate content** — problem, objective, and tradeoffs as articulated by the decision owner
-- **Capability map** — which tools are gated (with execution field mappings), which are read-only, which use default gating
-
-Calling without a domain returns a refreshed compact overview.
-
-### Organization Context
-
-Place a `context.md` file in `~/.hap/` (or `$HAP_DATA_DIR/`) to provide the agent with organizational context:
-
-```markdown
-## Organization
-Acme Corp — B2B SaaS for logistics.
-
-## Your Role
-Finance operations agent. Escalate unusual requests to #billing-ops.
-```
-
-This is included in the mandate brief and refreshed via `list-authorizations`.
+No credentials. No signing keys. Just the scope of what the agent is allowed to do — and the human's stated reason for granting it.
 
 ---
 
@@ -101,51 +83,30 @@ Requires [Docker](https://docs.docker.com/get-docker/).
 docker run -d --name hap-gateway -p 7400:3000 -p 7430:3030 -v $HOME/.hap:/app/data ghcr.io/humanagencyprotocol/hap-gateway
 ```
 
-Open `http://localhost:7400`. The MCP server is available at `http://localhost:7430`.
+Open `http://localhost:7400`. The MCP server is at `http://localhost:7430`.
 
-### Connect an Agent
-
-Any MCP-compatible client can connect to `http://localhost:7430`:
+Any MCP-compatible client can connect:
 
 ```
-Streamable HTTP:  POST http://localhost:7430/mcp     (recommended)
+Streamable HTTP:  POST http://localhost:7430/mcp
 SSE transport:    GET  http://localhost:7430/sse
-Health check:     GET  http://localhost:7430/health
-```
-
-**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "hap": {
-      "url": "http://localhost:7430/sse"
-    }
-  }
-}
 ```
 
 ---
 
-## Documentation
+## Technical Documentation
 
 | Document | Contents |
 |---|---|
-| [Authorization Flow](docs/authorization-flow.md) | Data flow, privacy model, gate wizard steps, tool execution, agent context, revocation |
-| [Security Model](docs/security.md) | Enforcement layers, verification checks, privacy model, encryption, fail-closed design |
-| [Architecture](docs/architecture.md) | System overview, services, internal communication, data storage, bounds/context model, project structure |
-| [Development](docs/development.md) | Local dev setup (with local or live SP), env vars, Docker, testing, related repos |
+| [Architecture](docs/architecture.md) | System overview, services, data storage, project structure |
+| [Authorization Flow](docs/authorization-flow.md) | Data flow, gate wizard, tool execution, agent context |
+| [Security Model](docs/security.md) | Enforcement layers, verification, encryption, fail-closed design |
+| [Development](docs/development.md) | Local setup, env vars, Docker, testing |
 
 ---
 
-See [humanagencyprotocol.org](https://humanagencyprotocol.org) for the full specification.
+Protocol specification: [humanagencyprotocol.org](https://humanagencyprotocol.org)
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Disclaimer
-
-This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability arising from the use of this software.
-
-This is alpha software. No support, SLA, or backwards compatibility is guaranteed. Use it, break it, fork it — but do not depend on it for anything you cannot afford to lose.
