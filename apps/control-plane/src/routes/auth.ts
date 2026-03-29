@@ -36,15 +36,6 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
       return;
     }
 
-    // Prevent concurrent sessions — one gateway, one user
-    const force = req.query.force === 'true' || (req.body as { force?: boolean })?.force === true;
-    if (vault.isUnlocked() && !force) {
-      res.status(409).json({
-        error: 'Another session is already active. Log out first, or use force=true to override.',
-      });
-      return;
-    }
-
     try {
       const spRes = await fetch(`${SP_URL}/api/auth/session`, {
         method: 'POST',
@@ -77,9 +68,13 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
         }
       }
 
-      // Return user data immediately — don't block on credential sync
+      // Return user data — warn if overwriting existing session
       const data = await spRes.json();
-      res.json(data);
+      const previousSessionActive = vault.isUnlocked();
+      if (previousSessionActive) {
+        console.error('[Control Plane] New login overwrites existing session');
+      }
+      res.json({ ...data, sessionOverwritten: previousSessionActive });
 
       // Background: re-push credentials and re-sync gates (non-blocking)
       (async () => {
