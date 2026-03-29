@@ -36,6 +36,15 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
       return;
     }
 
+    // Prevent concurrent sessions — one gateway, one user
+    const force = req.query.force === 'true' || (req.body as { force?: boolean })?.force === true;
+    if (vault.isUnlocked() && !force) {
+      res.status(409).json({
+        error: 'Another session is already active. Log out first, or use force=true to override.',
+      });
+      return;
+    }
+
     try {
       const spRes = await fetch(`${SP_URL}/api/auth/session`, {
         method: 'POST',
