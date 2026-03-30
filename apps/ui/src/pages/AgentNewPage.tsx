@@ -27,22 +27,24 @@ function getPathStatuses(attestations: PendingItem[]): Map<string, PathStatus> {
 
 export function AgentNewPage() {
   const navigate = useNavigate();
-  const { mode, group, groupId, domain } = useAuth();
+  const { group, groupId, domain } = useAuth();
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [fullProfiles, setFullProfiles] = useState<Map<string, AgentProfile>>(new Map());
   const [pathStatuses, setPathStatuses] = useState<Map<string, PathStatus>>(new Map());
-  const [expandedPath, setExpandedPath] = useState<string | null>(null); // "profileId::path"
+  const [teamProfiles, setTeamProfiles] = useState<Record<string, Record<string, string[]>>>({});
+  const [expandedPath, setExpandedPath] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       spClient.listProfiles().catch(() => []),
       spClient.getMyAttestations().catch(() => []),
-    ]).then(([profileList, attestations]) => {
+      groupId ? spClient.getTeamProfileConfig(groupId).catch(() => ({})) : Promise.resolve({}),
+    ]).then(([profileList, attestations, teamConfig]) => {
       setProfiles(profileList);
       setPathStatuses(getPathStatuses(attestations));
+      setTeamProfiles(teamConfig as Record<string, Record<string, string[]>>);
 
-      // Fetch full profiles for descriptions
       Promise.all(
         profileList.map(p =>
           spClient.getProfile(p.id)
@@ -51,20 +53,27 @@ export function AgentNewPage() {
         )
       ).then(results => {
         const map = new Map<string, AgentProfile>();
-        for (const r of results) {
-          if (r) map.set(r[0], r[1]);
-        }
+        for (const r of results) if (r) map.set(r[0], r[1]);
         setFullProfiles(map);
       });
     }).finally(() => setLoading(false));
-  }, []);
+  }, [groupId]);
+
+  const isTeamManaged = (profileId: string): boolean => {
+    return profileId in teamProfiles && Object.keys(teamProfiles[profileId]).length > 0;
+  };
+
+  const getRequiredRoles = (profileId: string, path: string): string[] => {
+    return teamProfiles[profileId]?.[path] ?? [];
+  };
 
   const handleCreate = (profileId: string, path: string) => {
+    const isTeam = isTeamManaged(profileId);
     sessionStorage.setItem('agentAuth', JSON.stringify({
       profileId,
       path,
-      groupId: mode === 'team' ? groupId : null,
-      groupName: mode === 'team' ? group?.name : null,
+      groupId: isTeam ? groupId : null,
+      groupName: isTeam ? group?.name : null,
       domain,
     }));
     navigate('/agent/gate');
@@ -78,18 +87,34 @@ export function AgentNewPage() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>Loading profiles...</p>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>Loading...</p>
       ) : profiles.length === 0 ? (
-        <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>No profiles available for your domain.</p>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>No profiles available.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {profiles.map(p => {
             const full = fullProfiles.get(p.id);
+            const isTeam = isTeamManaged(p.id);
+
             return (
               <div className="card" key={p.id}>
-                <h3 className="card-title" style={{ marginBottom: '0.125rem' }}>
-                  {profileDisplayName(p.id, p.name)}
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.125rem' }}>
+                  <h3 className="card-title" style={{ margin: 0 }}>
+                    {profileDisplayName(p.id, p.name)}
+                  </h3>
+                  {isTeam ? (
+                    <span style={{
+                      fontSize: '0.6rem', padding: '0.1rem 0.35rem', borderRadius: '0.2rem',
+                      background: 'var(--accent-subtle)', color: 'var(--accent)', fontWeight: 600,
+                    }}>Team</span>
+                  ) : (
+                    <span style={{
+                      fontSize: '0.6rem', padding: '0.1rem 0.35rem', borderRadius: '0.2rem',
+                      background: 'var(--bg-main)', color: 'var(--text-tertiary)', fontWeight: 600,
+                      border: '1px solid var(--border)',
+                    }}>Personal</span>
+                  )}
+                </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '1rem' }}>
                   {p.description}
                 </p>
@@ -101,8 +126,8 @@ export function AgentNewPage() {
                     const active = status?.active ?? 0;
                     const expired = status?.expired ?? 0;
                     const isExpanded = expandedPath === key;
+                    const roles = getRequiredRoles(p.id, path);
 
-                    // Determine style
                     let dotColor: string;
                     let borderColor: string;
                     let bg: string;
@@ -120,40 +145,24 @@ export function AgentNewPage() {
                       bg = 'transparent';
                     }
 
-                    // Label
                     let label = path;
-                    if (active > 0) {
-                      label += ` (${active})`;
-                    } else if (expired > 0) {
-                      label += ` (${expired} expired)`;
-                    }
+                    if (active > 0) label += ` (${active})`;
+                    else if (expired > 0) label += ` (${expired} expired)`;
 
                     return (
-                      <div key={path} style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div key={path}>
                         <button
                           onClick={() => setExpandedPath(isExpanded ? null : key)}
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
+                            display: 'flex', alignItems: 'center', gap: '0.4rem',
                             padding: '0.35rem 0.7rem',
-                            border: `1px solid ${borderColor}`,
-                            borderRadius: '0.375rem',
+                            border: `1px solid ${borderColor}`, borderRadius: '0.375rem',
                             background: isExpanded ? bg : 'transparent',
-                            cursor: 'pointer',
-                            fontSize: '0.8rem',
-                            color: 'var(--text-primary)',
-                            fontFamily: 'inherit',
-                            transition: 'background 0.15s',
+                            cursor: 'pointer', fontSize: '0.8rem',
+                            color: 'var(--text-primary)', fontFamily: 'inherit',
                           }}
                         >
-                          <span style={{
-                            width: '0.4rem',
-                            height: '0.4rem',
-                            borderRadius: '50%',
-                            background: dotColor,
-                            flexShrink: 0,
-                          }} />
+                          <span style={{ width: '0.4rem', height: '0.4rem', borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
                           {label}
                         </button>
                       </div>
@@ -168,18 +177,20 @@ export function AgentNewPage() {
                   const status = pathStatuses.get(expandedPath);
                   const active = status?.active ?? 0;
                   const expired = status?.expired ?? 0;
+                  const roles = getRequiredRoles(p.id, path);
 
                   return (
                     <div style={{
-                      marginTop: '0.75rem',
-                      padding: '0.75rem',
-                      background: 'var(--bg-main)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '0.5rem',
+                      marginTop: '0.75rem', padding: '0.75rem',
+                      background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '0.5rem',
                     }}>
                       {desc && (
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-                          {desc}
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>{desc}</p>
+                      )}
+
+                      {roles.length > 0 && (
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                          Requires: {roles.join(', ')}
                         </p>
                       )}
 
@@ -191,20 +202,14 @@ export function AgentNewPage() {
 
                       {expired > 0 && (
                         <p style={{ fontSize: '0.8rem', marginBottom: '0.5rem' }}>
-                          <Link
-                            to="/authorizations"
-                            style={{ color: 'var(--danger)', textDecoration: 'underline' }}
-                          >
-                            {expired} expired authorization{expired > 1 ? 's' : ''}
+                          <Link to="/authorizations" style={{ color: 'var(--danger)', textDecoration: 'underline' }}>
+                            {expired} expired
                           </Link>
                         </p>
                       )}
 
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => handleCreate(p.id, path)}
-                      >
-                        {expired > 0 && active === 0 ? 'Renew Authorization' : 'Create Authorization'}
+                      <button className="btn btn-primary btn-sm" onClick={() => handleCreate(p.id, path)}>
+                        {expired > 0 && active === 0 ? 'Renew' : 'Authorize'}
                       </button>
                     </div>
                   );

@@ -565,6 +565,15 @@ class SPClient {
     if (!res.ok) throw new Error(`Failed to remove integration: ${res.status}`);
   }
 
+  // ─── Team Profile Config ────────────────────────────────────────────────
+
+  async getTeamProfileConfig(groupId: string): Promise<Record<string, Record<string, string[]>>> {
+    const res = await this.fetch(`/api/groups/${encodeURIComponent(groupId)}/path-domains`);
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.pathDomains ?? {};
+  }
+
   // ─── Proposals ──────────────────────────────────────────────────────────
 
   async getProposals(domain: string): Promise<Proposal[]> {
