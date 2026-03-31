@@ -1,28 +1,24 @@
-# HAP Agent Gateway
+# HAP Local Gateway
 
-Part of [humanagencyprotocol.com](https://humanagencyprotocol.com) — the first service applying the [Human Agency Protocol](https://humanagencyprotocol.org).
+Part of [humanagencyprotocol.com](https://humanagencyprotocol.com) — applying the [Human Agency Protocol](https://humanagencyprotocol.org).
 
-AI systems are probabilistic — flexible, adaptive, powerful. Real-world actions are deterministic — irreversible, accountable. You can't safely let a probabilistic system directly control deterministic consequences.
+Let your AI agents act — within bounds you control.
 
-HAP separates intelligence from authority and enforces that boundary at execution. Let AI think freely. Only let it act within explicitly authorized human bounds.
+The gateway runs on your machine, between your AI agents and the tools they use — payments, email, CRM, deployments, infrastructure. Your agents go through a local checkpoint before reaching external services. Nothing executes without authorization.
 
-The gateway is where that boundary is enforced. It sits between AI agents and real-world tools — payments, email, CRM, deployments, infrastructure — and verifies every action against cryptographic proof of human authorization. Planning is unrestricted. Execution is strictly enforced.
-
-The result: more AI capability does not mean more risk. Organizations can safely grant agents real authority over consequential actions — because the bounds hold.
-
-> **Alpha (v0.1.0-alpha)** — Under active development.
+Works with any MCP-compatible agent. Define and authorize what they're allowed to do. Every action is bounded, time-limited, and traceable to a human decision — so agents can execute safely at scale.
 
 ---
 
-## Two Modes of Commitment
+## Automatic or Review
 
-A human creates an authorization by defining bounds and articulating the problem, objective, and accepted tradeoffs. The Service Provider at [humanagencyprotocol.com](https://humanagencyprotocol.com) signs the attestation. How the agent then operates depends on the commitment mode:
+Set the threshold. Routine actions execute automatically within the bounds you defined. High-stakes actions pause for your review before the agent acts.
 
-**Fully committed** — The human commits to specific bounds upfront: max amounts, allowed actions, time windows. The agent executes autonomously within those bounds. On every tool call, the Gatekeeper verifies the action falls within the attested bounds and the SP issues a signed receipt. No per-action human approval needed. One authorization, many actions, each individually proven.
+**Automatic** — You commit to specific bounds upfront: max amounts, allowed actions, time windows. The agent executes autonomously within those bounds. Each tool call is verified against your authorization and produces a signed receipt.
 
-**Committed per action** — The human defines bounds but defers full commitment. When the agent proposes an action, it becomes a proposal that the human reviews in the gateway UI — seeing exactly which tool, which arguments, which execution context. The human commits or rejects. Only after all required domain owners commit does execution proceed.
+**Review each action** — You define bounds but defer full commitment. When the agent proposes an action, you review it in the gateway UI — seeing exactly which tool, which arguments, which context. You approve or reject. Execution only proceeds after your decision.
 
-Both modes are bounded. Both produce receipts. Both create a full audit trail. The difference is delegation depth — whether the human trusts the bounds enough for autonomous execution, or wants to review each action the agent proposes.
+Both modes are bounded. Both produce receipts. Both create a full audit trail. The difference is whether you trust the bounds enough for autonomous execution, or want to review each action individually.
 
 ---
 
@@ -53,7 +49,7 @@ Gateway                                   |
   |    -> execute on commit               |
 ```
 
-The agent never holds credentials or signing authority. It is a bounded executor of human decisions — high autonomy without losing accountability.
+The agent never holds credentials or signing authority. It acts within the bounds you set — high autonomy without losing accountability.
 
 ---
 
