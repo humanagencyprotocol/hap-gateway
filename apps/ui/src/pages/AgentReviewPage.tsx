@@ -256,7 +256,7 @@ export function AgentReviewPage() {
               fontFamily: 'inherit',
             }}
           >
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem' }}>Automatic</div>
+            <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--text-primary)' }}>Automatic</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               Agent acts freely within your limits.
             </div>
@@ -274,7 +274,7 @@ export function AgentReviewPage() {
               fontFamily: 'inherit',
             }}
           >
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem' }}>Review Each Action</div>
+            <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--text-primary)' }}>Review Each Action</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               You review and approve each action before it executes.
             </div>
@@ -285,32 +285,34 @@ export function AgentReviewPage() {
         <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
           Duration
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem', alignItems: 'center' }}>
           {[
             { label: '1 hour', seconds: 3600 },
             { label: '24 hours', seconds: 86400 },
             { label: '7 days', seconds: 604800 },
             { label: '30 days', seconds: 2592000 },
+            { label: '1 year', seconds: 31536000 },
           ].filter(p => p.seconds <= ttlMax).map(preset => (
             <button
               key={preset.seconds}
               onClick={() => { setTtlSeconds(preset.seconds); setCustomTtl(''); }}
               style={{
-                padding: '0.35rem 0.7rem',
+                padding: '0.5rem 0.85rem',
                 border: ttlSeconds === preset.seconds ? '2px solid var(--accent)' : '1px solid var(--border)',
                 borderRadius: '0.375rem',
                 background: ttlSeconds === preset.seconds ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-                cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit',
+                cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit',
+                color: 'var(--text-primary)',
               }}
             >
               {preset.label}
             </button>
           ))}
-          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
             <input
               type="number"
               className="form-input"
-              style={{ width: '4rem', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+              style={{ width: '5rem', padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
               placeholder="Custom"
               value={customTtl}
               onChange={e => {
@@ -324,7 +326,7 @@ export function AgentReviewPage() {
             />
             <select
               className="form-input"
-              style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem' }}
+              style={{ padding: '0.45rem 0.5rem', fontSize: '0.85rem' }}
               value={customTtlUnit}
               onChange={e => {
                 setCustomTtlUnit(e.target.value as 'hours' | 'days');
