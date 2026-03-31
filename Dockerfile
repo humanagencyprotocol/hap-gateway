@@ -28,8 +28,10 @@ COPY --from=build /build/apps/ apps/
 # Copy integration manifests
 COPY content/integrations/ content/integrations/
 
-# Copy profiles (fetched from sibling hap-profiles repo at build time)
-COPY profiles/ /hap-profiles/
+# Fetch profiles from GitHub at build time
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/* \
+    && git clone --depth 1 https://github.com/humanagencyprotocol/hap-profiles.git /hap-profiles \
+    && rm -rf /hap-profiles/.git
 
 # Create data directory for gate store
 RUN mkdir -p /app/data
