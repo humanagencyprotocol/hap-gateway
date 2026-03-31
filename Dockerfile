@@ -14,7 +14,7 @@ RUN pnpm build
 # ─── Production stage ──────────────────────────────────────────────────────
 FROM node:22-slim AS production
 
-RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends tini git ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
@@ -28,9 +28,8 @@ COPY --from=build /build/apps/ apps/
 # Copy integration manifests
 COPY content/integrations/ content/integrations/
 
-# Fetch profiles from GitHub at build time
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/* \
-    && git clone --depth 1 https://github.com/humanagencyprotocol/hap-profiles.git /hap-profiles \
+# Fetch profiles from GitHub (public repo)
+RUN git clone --depth 1 https://github.com/humanagencyprotocol/hap-profiles.git /hap-profiles \
     && rm -rf /hap-profiles/.git
 
 # Create data directory for gate store
