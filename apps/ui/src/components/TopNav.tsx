@@ -27,7 +27,7 @@ export function TopNav({ onMenuToggle }: TopNavProps) {
       <div className="top-nav-inner">
         <div className="logo-group">
           <span className="logo">HAP</span>
-          <span className="version-badge">Alpha</span>
+          <span className="version-badge">Local Gateway</span>
         </div>
         <div className="nav-spacer" />
         <div className="nav-actions nav-actions-desktop">
