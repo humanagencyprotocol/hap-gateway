@@ -192,11 +192,18 @@ app.get('/auth/oauth/:integrationId/callback', async (req: Request, res: Respons
       return;
     }
     // Store token alongside existing credentials (refresh_token for Gmail, access_token for LinkedIn, etc.)
-    vault.setCredential(integrationId, {
-      ...creds,
-      [oauth.tokenStorage]: tokenValue,
-    });
+    const updatedCreds = { ...creds, [oauth.tokenStorage]: tokenValue };
+    vault.setCredential(integrationId, updatedCreds);
     console.log(`[Control Plane] ${integrationId} OAuth tokens stored in vault`);
+
+    // Push updated credentials to MCP server so integration can start
+    try {
+      await pushServiceCredentials(integrationId, updatedCreds);
+      console.log(`[Control Plane] ${integrationId} credentials pushed to MCP`);
+    } catch (err) {
+      console.error(`[Control Plane] Failed to push ${integrationId} credentials to MCP:`, err);
+    }
+
     res.send(`<html><body><h2>${manifest.id} connected successfully</h2><p>You can close this window.</p><script>setTimeout(()=>window.close(),2000)</script></body></html>`);
   } catch (err) {
     console.error(`[Control Plane] ${integrationId} OAuth error:`, err);
