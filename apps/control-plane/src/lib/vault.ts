@@ -79,6 +79,33 @@ export class Vault {
     this.spSessionCookie = null;
   }
 
+  /**
+   * Check if the vault was created by a different API key.
+   * Tries to decrypt the first credential — if it fails, keys don't match.
+   * Returns true if the vault belongs to a different user (or is empty).
+   */
+  isVaultFromDifferentKey(): boolean {
+    const data = this.readVaultFile();
+    const credKeys = Object.keys(data.credentials);
+    if (credKeys.length === 0) return false; // empty vault, no conflict
+    try {
+      this.decrypt(data.credentials[credKeys[0]]);
+      return false; // decryption succeeded, same key
+    } catch {
+      return true; // decryption failed, different key
+    }
+  }
+
+  /**
+   * Wipe all vault data — credentials, services, and salt.
+   * Used when a different user logs in on the same gateway.
+   */
+  wipe(): void {
+    this.writeVaultFile({ version: 1, credentials: {} });
+    this.writeServicesFile({ version: 1, services: {} });
+    this.clearKey();
+  }
+
   isUnlocked(): boolean {
     return this.vaultKey !== null;
   }

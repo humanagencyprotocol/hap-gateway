@@ -152,6 +152,21 @@ export async function activateIntegration(manifest: {
   });
 }
 
+export async function stopAllIntegrations(): Promise<void> {
+  const data = await getIntegrations() as { integrations?: Array<{ id: string; running: boolean }> };
+  if (!data?.integrations) return;
+  for (const integration of data.integrations) {
+    if (integration.running) {
+      try {
+        await removeIntegration(integration.id);
+        console.error(`[MCP Bridge] Stopped integration: ${integration.id}`);
+      } catch (err) {
+        console.error(`[MCP Bridge] Failed to stop ${integration.id}:`, err);
+      }
+    }
+  }
+}
+
 export async function getManifests(): Promise<unknown> {
   const res = await fetch(`${MCP_BASE}/internal/manifests`, {
     headers: internalHeaders(),

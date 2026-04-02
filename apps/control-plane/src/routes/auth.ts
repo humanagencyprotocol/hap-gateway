@@ -8,7 +8,7 @@
  */
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import { configure, pushServiceCredentials, resyncGates } from '../lib/mcp-bridge';
+import { configure, pushServiceCredentials, resyncGates, stopAllIntegrations } from '../lib/mcp-bridge';
 import type { Vault } from '../lib/vault';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
@@ -59,6 +59,19 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
       // Derive vault encryption key from API key
       vault.deriveAndSetKey(apiKey);
 
+      // Check if vault belongs to a different user — if so, wipe and start fresh
+      if (vault.isVaultFromDifferentKey()) {
+        console.error('[Control Plane] Different user detected — wiping vault and stopping integrations');
+        try {
+          await stopAllIntegrations();
+        } catch (err) {
+          console.error('[Control Plane] Failed to stop integrations:', err);
+        }
+        vault.wipe();
+        // Re-derive key after wipe (wipe clears the salt, need a fresh one)
+        vault.deriveAndSetKey(apiKey);
+      }
+
       // Push session cookie + vault key to MCP server (must complete before responding)
       if (sessionCookie) {
         try {
@@ -68,13 +81,9 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
         }
       }
 
-      // Return user data — warn if overwriting existing session
+      // Return user data
       const data = await spRes.json();
-      const previousSessionActive = vault.isUnlocked();
-      if (previousSessionActive) {
-        console.error('[Control Plane] New login overwrites existing session');
-      }
-      res.json({ ...data, sessionOverwritten: previousSessionActive });
+      res.json(data);
 
       // Background: re-push credentials and re-sync gates (non-blocking)
       (async () => {
@@ -109,7 +118,12 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
    * Requires valid X-API-Key — prevents anonymous DoS.
    * Clears vault key + SP cookie from memory.
    */
-  router.post('/logout', logoutAuth, (_req: Request, res: Response) => {
+  router.post('/logout', logoutAuth, async (_req: Request, res: Response) => {
+    try {
+      await stopAllIntegrations();
+    } catch (err) {
+      console.error('[Control Plane] Failed to stop integrations on logout:', err);
+    }
     vault.clearKey();
     res.json({ ok: true });
   });
