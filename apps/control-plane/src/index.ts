@@ -186,14 +186,15 @@ app.get('/auth/oauth/:integrationId/callback', async (req: Request, res: Respons
       }),
     });
     const tokens = await tokenRes.json() as { refresh_token?: string; access_token?: string; error?: string };
-    if (tokens.error || !tokens.refresh_token) {
-      res.status(400).send(`<html><body><h2>Token exchange failed</h2><p>${String(tokens.error || 'No refresh token received')}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
+    const tokenValue = tokens.refresh_token ?? tokens.access_token;
+    if (tokens.error || !tokenValue) {
+      res.status(400).send(`<html><body><h2>Token exchange failed</h2><p>${String(tokens.error || 'No token received')}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
       return;
     }
-    // Store refresh token alongside existing credentials
+    // Store token alongside existing credentials (refresh_token for Gmail, access_token for LinkedIn, etc.)
     vault.setCredential(integrationId, {
       ...creds,
-      [oauth.tokenStorage]: tokens.refresh_token,
+      [oauth.tokenStorage]: tokenValue,
     });
     console.log(`[Control Plane] ${integrationId} OAuth tokens stored in vault`);
     res.send(`<html><body><h2>${manifest.id} connected successfully</h2><p>You can close this window.</p><script>setTimeout(()=>window.close(),2000)</script></body></html>`);
