@@ -20,7 +20,7 @@ import { createVaultRouter } from './routes/vault';
 import { createAIRouter } from './routes/ai';
 import { createGitHubRouter } from './routes/github';
 import { requireAuth } from './middleware/auth';
-import { pushGateContent, setInternalSecret, getManifests, getGateContent } from './lib/mcp-bridge';
+import { pushGateContent, pushServiceCredentials, setInternalSecret, getManifests, getGateContent } from './lib/mcp-bridge';
 import { createMCPRouter } from './routes/mcp';
 import { startUpdateChecker, getUpdateStatus } from './lib/update-checker';
 
