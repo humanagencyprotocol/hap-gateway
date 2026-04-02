@@ -69,10 +69,10 @@ export function GroupsPage() {
     try {
       await spClient.joinGroup(joinCode.trim());
       await refreshGroups();
-      setSuccessMsg('Joined group!');
+      setSuccessMsg('Joined team!');
       setJoinCode('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to join group');
+      setError(e instanceof Error ? e.message : 'Failed to join team');
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ export function GroupsPage() {
       setSuccessMsg(`Created ${name}!`);
       setNewGroupName('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create group');
+      setError(e instanceof Error ? e.message : 'Failed to create team');
     } finally {
       setLoading(false);
     }
@@ -109,7 +109,7 @@ export function GroupsPage() {
           <p className="page-subtitle">Manage your team and role assignments.</p>
         </div>
         <button className="btn btn-primary" onClick={() => document.getElementById('create-group-section')?.scrollIntoView({ behavior: 'smooth' })}>
-          Create Group
+          Create Team
         </button>
       </div>
 
@@ -165,7 +165,7 @@ export function GroupsPage() {
 
       {/* Join Another Group */}
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Join Another Group</h4>
+        <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Join Another Team</h4>
         <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
           Enter an invite code from a team admin.
         </p>
@@ -185,14 +185,14 @@ export function GroupsPage() {
 
       {/* Create Group */}
       <div className="card" id="create-group-section">
-        <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Create a New Group</h4>
+        <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Create a New Team</h4>
         <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
           Start a new team and invite members.
         </p>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <input
             className="form-input"
-            placeholder="Group name (e.g., Acme Corp)"
+            placeholder="Team name (e.g., Acme Corp)"
             value={newGroupName}
             onChange={e => setNewGroupName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleCreate()}

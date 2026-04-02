@@ -14,7 +14,7 @@ export function ContextStrip({ profileId, path, bounds, groupName, domain, onSwi
     <div className="context-strip">
       {groupName && (
         <>
-          <span className="context-strip-label">Group:</span>
+          <span className="context-strip-label">Team:</span>
           <span><strong>{groupName}</strong>{domain ? ` / ${domain}` : ''}</span>
         </>
       )}
