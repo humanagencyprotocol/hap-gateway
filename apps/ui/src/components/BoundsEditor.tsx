@@ -3,7 +3,6 @@ import type { AgentProfile, AgentBoundsParams, AgentContextParams, AgentFramePar
 
 interface Props {
   profile: AgentProfile;
-  pathId: string;
   onConfirm: (bounds: AgentBoundsParams, context: AgentContextParams) => void;
   readOnly?: boolean;
   initialBounds?: AgentBoundsParams;
@@ -317,16 +316,13 @@ function FieldRow({
 
 // ─── BoundsEditor ───────────────────────────────────────────────────────────
 
-export function BoundsEditor({ profile, pathId, onConfirm, readOnly, initialBounds, initialContext, initialFrame }: Props) {
+export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, initialContext, initialFrame }: Props) {
   const boundsSchema = profile.boundsSchema ?? profile.frameSchema;
   const contextSchema = profile.contextSchema;
 
   const boundsFields = boundsSchema
-    ? Object.entries(boundsSchema.fields).filter(([key, field]) => {
+    ? Object.entries(boundsSchema.fields).filter(([key]) => {
         if (key === 'profile' || key === 'path') return false;
-        // If the field specifies which paths it applies to, filter by selected path
-        const fieldPaths = (field as any).paths as string[] | undefined;
-        if (fieldPaths && fieldPaths.length > 0 && !fieldPaths.includes(pathId)) return false;
         return true;
       })
     : [];
@@ -362,7 +358,6 @@ export function BoundsEditor({ profile, pathId, onConfirm, readOnly, initialBoun
   const handleConfirm = () => {
     const bounds: AgentBoundsParams = {
       profile: profile.id,
-      path: pathId,
     };
 
     for (const [key, fieldDef] of boundsFields) {

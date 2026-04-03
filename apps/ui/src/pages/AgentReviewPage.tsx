@@ -18,7 +18,6 @@ interface GateData {
 
 interface AuthData {
   profileId: string;
-  path: string;
   groupId?: string;
   groupName?: string;
   domain: string;
@@ -86,7 +85,6 @@ export function AgentReviewPage() {
         hashGateContent(gateData.gateContent.tradeoffs),
         hashGateContent(JSON.stringify({
           profile: authData.profileId,
-          path: authData.path,
           domain,
           group: authData.groupId,
         })),
@@ -95,7 +93,6 @@ export function AgentReviewPage() {
       // Attest (creates the attestation on SP)
       const result = await spClient.attest({
         profile_id: authData.profileId,
-        path: authData.path,
         bounds: gateData.bounds,
         bounds_hash: boundsHash,
         context_hash: contextHash,
@@ -113,7 +110,6 @@ export function AgentReviewPage() {
         boundsHash: result.bounds_hash ?? boundsHash,
         contextHash,
         context: gateData.context,
-        path: authData.path,
         gateContent: gateData.gateContent,
       });
 
@@ -177,8 +173,6 @@ export function AgentReviewPage() {
             {profileDisplayName(authData.profileId)}
             <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>{authData.profileId}</div>
           </dd>
-          <dt>Path</dt>
-          <dd>{authData.path}</dd>
           <dt>Domain</dt>
           <dd>{authData.domain || authDomain}</dd>
           {authData.groupName && (

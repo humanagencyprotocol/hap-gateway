@@ -2,14 +2,13 @@ import { profileDisplayName } from '../lib/profile-display';
 
 interface Props {
   profileId?: string;
-  path?: string;
   bounds?: string;
   groupName?: string;
   domain?: string;
   onSwitch?: () => void;
 }
 
-export function ContextStrip({ profileId, path, bounds, groupName, domain, onSwitch }: Props) {
+export function ContextStrip({ profileId, bounds, groupName, domain, onSwitch }: Props) {
   return (
     <div className="context-strip">
       {groupName && (
@@ -19,7 +18,6 @@ export function ContextStrip({ profileId, path, bounds, groupName, domain, onSwi
         </>
       )}
       {profileId && <span><strong>Profile:</strong> {profileDisplayName(profileId)}</span>}
-      {path && <span><strong>Path:</strong> {path}</span>}
       {bounds && <span><strong>Bounds:</strong> {bounds}</span>}
       {onSwitch && (
         <button

@@ -23,7 +23,6 @@ function getGateQuestions(profile: AgentProfile | null) {
 
 interface AuthData {
   profileId: string;
-  path: string;
   groupId?: string;
   groupName?: string;
   domain: string;
@@ -74,8 +73,8 @@ export function GateWizardPage() {
       setAiResponse(null);
     } else {
       // Save gate content + TTL config and navigate to review
-      const pathTtl = profile?.executionPaths?.[authData!.path]?.ttl ?? profile?.ttl;
-      sessionStorage.setItem('agentGate', JSON.stringify({ bounds, context, gateContent, ttlConfig: pathTtl }));
+      const ttlConfig = profile?.ttl;
+      sessionStorage.setItem('agentGate', JSON.stringify({ bounds, context, gateContent, ttlConfig }));
       navigate('/agent/review');
     }
   };
@@ -91,7 +90,6 @@ export function GateWizardPage() {
         currentText: gateContent[gateKey],
         context: authData ? {
           profileId: authData.profileId,
-          path: authData.path,
           bounds: boundsString || undefined,
         } : undefined,
       });
@@ -122,7 +120,6 @@ export function GateWizardPage() {
       {/* Context strip */}
       <ContextStrip
         profileId={authData.profileId}
-        path={authData.path}
         bounds={boundsString || undefined}
         groupName={authData.groupName}
         domain={authData.domain}
@@ -133,7 +130,6 @@ export function GateWizardPage() {
         <div className="card">
           <BoundsEditor
             profile={profile}
-            pathId={authData.path}
             onConfirm={handleBoundsConfirm}
             initialBounds={bounds || undefined}
             initialContext={context || undefined}
