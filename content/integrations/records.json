@@ -26,7 +26,7 @@
       "list_records": { "category": "read", "boundField": "read_access", "requiredValue": "unlimited" },
       "get_record": { "category": "read", "boundField": "read_access", "requiredValue": "unlimited" },
       "search_records": { "category": "read", "boundField": "read_access", "requiredValue": "unlimited" },
-      "export_records": { "boundField": "export_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": {} },
+      "export_records": { "category": "disabled" },
       "create_record": { "executionMapping": {}, "staticExecution": {} },
       "archive_record": { "boundField": "archive_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": {} },
       "update_record": { "category": "disabled" },
