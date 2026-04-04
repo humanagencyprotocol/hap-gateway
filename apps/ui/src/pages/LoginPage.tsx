@@ -4,11 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { TopNav } from '../components/TopNav';
 
 const FEATURES = [
-  { icon: '\u25A0', title: 'Authorize Agents', desc: 'Define what each agent can do, which tools it can access, and for how long. Every authorization is time-limited.' },
-  { icon: '\u25C9', title: 'Enforce at Runtime', desc: 'The gateway intercepts every tool call. Unauthorized or expired actions are blocked before they reach external services.' },
-  { icon: '\u26A0', title: 'Secure Vault', desc: 'API keys and credentials are encrypted at rest. Agents never see raw secrets \u2014 the gateway resolves them at the point of tool execution.' },
-  { icon: '\u21B7', title: 'Deploy Reviews', desc: 'Review pull requests through a structured gate flow before code reaches production. Every merge requires human attestation.' },
-  { icon: '\u2630', title: 'Audit Trail', desc: 'Every authorization, tool call, and enforcement decision is logged locally. Full visibility into what agents did and why.' },
+  { icon: '\u25A0', title: 'Runs on Your Machine', desc: 'Your gateway, your rules. Credentials stay encrypted locally. Nothing leaves without your authorization.' },
+  { icon: '\u25C9', title: 'Automatic or Review', desc: 'Routine actions execute within your bounds. High-stakes actions pause for your review.' },
+  { icon: '\u25CB', title: 'Personal or Team', desc: 'Use it solo or with your team. For critical actions, require approval from multiple members.' },
+  { icon: '\u21B7', title: 'Works With Any Agent', desc: 'Connect Claude, Cursor, or any MCP-compatible agent. One config, done.' },
+  { icon: '\u2630', title: 'Signed Receipts', desc: 'Every action produces cryptographic proof \u2014 what was done, when, under which authorization.' },
+  { icon: '\u26A0', title: 'Secure Vault', desc: 'API keys and credentials encrypted at rest. Agents never see raw secrets.' },
 ];
 
 export function LoginPage() {
@@ -35,10 +36,10 @@ export function LoginPage() {
         <div className="login-split-left">
           <div style={{ maxWidth: '28rem' }}>
             <h1 style={{ fontSize: 'clamp(2.25rem, 4vw, 3.25rem)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '1.25rem' }}>
-              The Local<br /><span style={{ color: 'var(--accent)' }}>AI Agent Gateway</span>
+              Let your AI agents act —<br /><span style={{ color: 'var(--accent)' }}>within bounds you control.</span>
             </h1>
             <p style={{ fontSize: '1.125rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '3rem' }}>
-              The gateway sits between your AI agents and external tools. Agents only get access to what you've authorized — nothing more, nothing less.
+              Define what your agents are allowed to do. Every action is bounded, time-limited, and traceable to your decision.
             </p>
             <div style={{ display: 'grid', gap: '2rem' }}>
               {FEATURES.map(f => (
@@ -96,7 +97,7 @@ export function LoginPage() {
 
             <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
-                Create a demo account on Humanagencyprotocol.com,<br />then come back to sign in.
+                Create an account on humanagencyprotocol.com,<br />then come back to sign in.
               </p>
               <a
                 href="https://www.humanagencyprotocol.com/register"
