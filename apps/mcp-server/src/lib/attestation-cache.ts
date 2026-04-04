@@ -71,7 +71,7 @@ export class AttestationCache {
    */
   async syncAuthorization(frameHash: string): Promise<CachedAuthorization | null> {
     const result = await this.spClient.getAttestations(frameHash);
-    if (!result.path || !result.profile_id || !result.frame) return null;
+    if (!result.profile_id || !result.frame) return null;
 
     // v0.4: prefer bounds_hash; fall back to frame_hash for v0.3 compat
     const boundsHash = result.bounds_hash ?? result.frame_hash;
@@ -82,7 +82,7 @@ export class AttestationCache {
       boundsHash: result.bounds_hash,  // v0.4 (undefined for v0.3)
       contextHash: result.context_hash,
       profileId: result.profile_id,
-      path: result.path,
+      path: result.path ?? result.profile_id,
       frame: bounds,                   // compat alias
       bounds: result.bounds,           // v0.4 (undefined for v0.3)
       attestations: result.attestations.map(a => ({
