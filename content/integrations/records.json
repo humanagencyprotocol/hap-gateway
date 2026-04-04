@@ -2,7 +2,7 @@
   "id": "records",
   "name": "Records",
   "version": "1.0.0",
-  "description": "Personal knowledge store — notes, decisions, research, bookmarks managed by AI agents. Records are immutable once created.",
+  "description": "Personal knowledge store — notes, decisions, research, bookmarks managed by AI agents",
   "icon": "file-text",
   "profile": "records",
   "personalDefault": true,
@@ -30,14 +30,14 @@
       "create_record": { "executionMapping": {}, "staticExecution": {} },
       "archive_record": { "boundField": "archive_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": {} },
       "update_record": { "category": "disabled" },
-      "delete_record": { "category": "disabled" }
+      "delete_record": { "boundField": "delete_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": {} }
     }
   },
   "setupHint": "No configuration needed — works out of the box.",
   "setupGuide": [
     {
       "title": "Ready to use",
-      "description": "Records stores data locally on your machine. No external account or API key needed. Your AI agents can create notes, decisions, research, and bookmarks. Records are immutable — once created, they cannot be edited or deleted."
+      "description": "Records stores data locally on your machine. No external account or API key needed. Your AI agents can create notes, decisions, research, and bookmarks. Delete and archive access are off by default — enable them explicitly if needed."
     },
     {
       "title": "Optional: use a shared database",
