@@ -256,8 +256,8 @@ app.post('/gate-content', jsonParser, authGuard, async (req: Request, res: Respo
       boundsHash?: string;
       contextHash?: string;
       context?: Record<string, string | number>;
-      path: string;
-      gateContent: { problem: string; objective: string; tradeoffs: string };
+      path?: string;
+      gateContent: Record<string, string>;
     };
 
     await pushGateContent({ frameHash, boundsHash, contextHash, context, path, gateContent });
