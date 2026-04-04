@@ -106,15 +106,24 @@ export function AgentReviewPage() {
       });
 
       // Push gate content + context to MCP server (after attestation exists on SP)
-      await spClient.pushGateContent({
-        boundsHash: result.bounds_hash ?? boundsHash,
-        contextHash,
-        context: gateData.context,
-        gateContent: gateData.gateContent,
-      });
+      const attestationHash = result.bounds_hash ?? result.frame_hash ?? boundsHash;
+      try {
+        await spClient.pushGateContent({
+          boundsHash: attestationHash,
+          contextHash,
+          context: gateData.context,
+          gateContent: gateData.gateContent,
+        });
+      } catch (pushErr) {
+        // Gate content push failed — revoke the attestation so it doesn't orphan
+        try {
+          await spClient.revokeAttestation(attestationHash, 'Auto-revoked: gate content push failed');
+        } catch { /* best effort */ }
+        throw new Error(`Authorization signed but gate content delivery failed. The attestation was revoked. Please try again. (${pushErr instanceof Error ? pushErr.message : 'Unknown error'})`);
+      }
 
       setSuccess({
-        frameHash: result.bounds_hash ?? result.frame_hash ?? boundsHash,
+        frameHash: attestationHash,
         status: result.status,
         commitment: commitMode === 'per-action' ? 'per-action' : 'immediate',
       });

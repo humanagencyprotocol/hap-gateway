@@ -66,15 +66,18 @@ export class SharedState {
   getEnrichedAuthorizations(): EnrichedAuthorization[] {
     const authorizations = this.cache.getAllAuthorizations();
 
-    return authorizations.map(auth => {
-      const gateEntry = this.gateStore.get(auth.path);
-      return {
-        ...auth,
-        gateContent: gateEntry?.gateContent ?? null,
-        // Merge context from gate store if not already on the cached auth
-        context: auth.context ?? gateEntry?.context,
-        contextHash: auth.contextHash ?? gateEntry?.contextHash,
-      };
-    });
+    return authorizations
+      .map(auth => {
+        const gateEntry = this.gateStore.get(auth.path);
+        return {
+          ...auth,
+          gateContent: gateEntry?.gateContent ?? null,
+          // Merge context from gate store if not already on the cached auth
+          context: auth.context ?? gateEntry?.context,
+          contextHash: auth.contextHash ?? gateEntry?.contextHash,
+        };
+      })
+      // Only expose authorizations with gate content — incomplete ones are not usable
+      .filter(auth => auth.gateContent !== null);
   }
 }
