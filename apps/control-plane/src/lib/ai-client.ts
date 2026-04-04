@@ -19,7 +19,7 @@ export const PROVIDER_PRESETS: Record<string, AIConfig> = {
   ollama: {
     provider: 'ollama',
     endpoint: 'http://localhost:11434',
-    model: 'gemma4:12b',
+    model: 'gemma4:e4b',
   },
   openrouter: {
     provider: 'openai-compatible',

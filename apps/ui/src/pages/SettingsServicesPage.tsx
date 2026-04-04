@@ -5,7 +5,7 @@ const PROVIDER_CONFIG: Record<string, { provider: string; endpoint: string; mode
   ollama: {
     provider: 'ollama',
     endpoint: 'http://localhost:11434',
-    models: ['gemma4:12b', 'gemma4:27b', 'llama3.2', 'llama3.1', 'mistral', 'qwen2.5', 'phi3'],
+    models: ['gemma4:e4b', 'gemma4:e2b', 'gemma4:26b', 'gemma4:31b', 'llama3.2', 'llama3.1', 'mistral', 'qwen2.5'],
   },
   openrouter: {
     provider: 'openai-compatible',
