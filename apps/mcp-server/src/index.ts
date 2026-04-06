@@ -148,7 +148,10 @@ export function createMcpServer(
   const proxiedTools = new Map<string, { tool: DiscoveredTool; registered: ReturnType<typeof server.registerTool> }>();
 
   function registerProxiedTools() {
-    if (!integrationManager) return;
+    if (!integrationManager) {
+      console.error('[MCP] registerProxiedTools: no integrationManager');
+      return;
+    }
 
     const allTools = integrationManager.getAllTools();
 
@@ -169,16 +172,16 @@ export function createMcpServer(
       const zodShape = jsonSchemaToZodShape(tool.inputSchema);
       const description = buildProxiedToolDescription(tool, state);
 
-      const registered = server.registerTool(
-        tool.namespacedName,
-        {
-          description,
-          ...(Object.keys(zodShape).length > 0 ? { inputSchema: zodShape } : {}),
-        },
-        handler as Parameters<typeof server.registerTool>[2],
-      );
-
-      proxiedTools.set(tool.namespacedName, { tool, registered });
+      try {
+        const registered = server.registerTool(
+          tool.namespacedName,
+          { description },
+          handler as Parameters<typeof server.registerTool>[2],
+        );
+        proxiedTools.set(tool.namespacedName, { tool, registered });
+      } catch (err) {
+        console.error(`[MCP] Failed to register tool ${tool.namespacedName}:`, err);
+      }
     }
   }
 

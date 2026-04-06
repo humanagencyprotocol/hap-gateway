@@ -339,6 +339,10 @@ app.get('/sse', async (_req: Request, res: Response) => {
     console.error(`[HAP MCP] SSE session ${sessionId} closed`);
   });
 
+  // Debug: register a dummy tool to verify dynamic registration works
+  server.registerTool('debug_test_tool', { description: 'Debug test' }, async () => ({
+    content: [{ type: 'text' as const, text: 'debug' }],
+  }));
   await server.connect(transport);
 });
 
