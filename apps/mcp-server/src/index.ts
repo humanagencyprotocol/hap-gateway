@@ -175,7 +175,10 @@ export function createMcpServer(
       try {
         const registered = server.registerTool(
           tool.namespacedName,
-          { description },
+          {
+            description,
+            ...(Object.keys(zodShape).length > 0 ? { inputSchema: zodShape } : {}),
+          },
           handler as Parameters<typeof server.registerTool>[2],
         );
         proxiedTools.set(tool.namespacedName, { tool, registered });
