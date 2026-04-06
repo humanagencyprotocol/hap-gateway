@@ -72,9 +72,9 @@ export class MCPGatekeeper {
     const resolvedBounds = override?.bounds ?? auth.bounds ?? auth.frame;
     const resolvedContext = override?.context ?? auth.context;
 
-    // Ensure profile and path are present — the core gatekeeper needs them to resolve
-    // the profile, but v0.4 bounds objects from the SP may not include them.
-    const frame = { ...resolvedBounds, profile: auth.profileId, path: auth.path };
+    // Ensure profile is present — the core gatekeeper needs it to resolve the profile.
+    // v0.4: path removed from protocol, not included in bounds.
+    const frame = { ...resolvedBounds, profile: auth.profileId };
 
     const request: GatekeeperRequest = {
       frame,
