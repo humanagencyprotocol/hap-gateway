@@ -112,8 +112,8 @@ importers:
   packages/hap-core:
     dependencies:
       '@humanagencyp/hap-core':
-        specifier: ^0.4.1
-        version: 0.4.1
+        specifier: ^0.4.2
+        version: 0.4.2
     devDependencies:
       tsup:
         specifier: ^8.0.0
@@ -507,8 +507,8 @@ packages:
     peerDependencies:
       hono: ^4
 
-  '@humanagencyp/hap-core@0.4.1':
-    resolution: {integrity: sha512-eaHzCbY2v4dtqy/JSkFfVM7ARD5B4bAhFXTS/AcTaPHSmGTAi11iiI1SVxbYAdpP0ZO1DnD3V+YrFwjE+Mb8aw==}
+  '@humanagencyp/hap-core@0.4.2':
+    resolution: {integrity: sha512-4TojnM3Q01YLK5Y8YASjiu2MRZ1qm2rSqB5umq9r+t5sgzjH/qIAGXUU30jCwPvVuVqqx6JbAnOq6zUSYuE0qQ==}
 
   '@jest/schemas@29.6.3':
     resolution: {integrity: sha512-mo5j5X+jIZmJQveBKeS/clAueipV7KgiX1vMgCxam1RNYiqE1w62n0/tJJnHtjW8ZHcQco5gY85jA3mi0L+nSA==}
@@ -2092,7 +2092,7 @@ snapshots:
     dependencies:
       hono: 4.12.5
 
-  '@humanagencyp/hap-core@0.4.1':
+  '@humanagencyp/hap-core@0.4.2':
     dependencies:
       '@noble/ed25519': 2.3.0
 
