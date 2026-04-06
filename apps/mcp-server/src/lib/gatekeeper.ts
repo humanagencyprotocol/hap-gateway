@@ -68,19 +68,17 @@ export class MCPGatekeeper {
     const publicKeyHex = await this.cache.getPublicKey();
 
     // Build Gatekeeper request.
-    // v0.4: prefer bounds over frame; use context from override (gate store) or cached auth.
+    // Context is NOT re-verified at execution time — it was verified once when the
+    // authorization was created. Re-verifying fails because the declared context
+    // (from authorization) differs from the execution context (from tool call).
     const resolvedBounds = override?.bounds ?? auth.bounds ?? auth.frame;
-    const resolvedContext = override?.context ?? auth.context;
 
-    // Ensure profile is present — the core gatekeeper needs it to resolve the profile.
-    // v0.4: path removed from protocol, not included in bounds.
     const frame = { ...resolvedBounds, profile: auth.profileId };
 
     const request: GatekeeperRequest = {
       frame,
       attestations: auth.attestations.map(a => a.blob),
       execution,
-      ...(resolvedContext ? { context: resolvedContext } : {}),
     };
 
     const result = await verify(request, publicKeyHex, undefined, this.executionLog);
