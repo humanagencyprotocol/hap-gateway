@@ -139,6 +139,7 @@ export class SPClient {
     profileId: string;
     path: string;
     action: string;
+    actionType?: string;
     executionContext: Record<string, unknown>;
     amount?: number;
   }): Promise<{ receipt: Record<string, unknown> }> {

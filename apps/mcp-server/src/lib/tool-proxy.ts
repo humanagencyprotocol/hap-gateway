@@ -194,11 +194,22 @@ export function createGatedToolHandler(
 
         // Request receipt from SP (pre-flight — fail closed)
         try {
+          // Derive actionType from tool name prefix for cumulative tracking.
+          // e.g., create_contact → 'write', delete_contact → 'delete', send_message → 'send'
+          const actionType = String(
+            execution.action_type ??
+            (tool.originalName.startsWith('delete') ? 'delete' :
+             tool.originalName.startsWith('send') ? 'send' :
+             tool.originalName.startsWith('archive') ? 'archive' :
+             'write')
+          );
+
           await state.spClient.postReceipt({
-            attestationHash: auth.boundsHash ?? auth.frameHash,  // prefer boundsHash (v0.4)
+            attestationHash: auth.boundsHash ?? auth.frameHash,
             profileId: auth.profileId,
             path: auth.path,
             action: String(execution.action_type ?? tool.originalName),
+            actionType,
             executionContext: { ...execution },
             amount: typeof execution.amount === 'number' ? execution.amount : undefined,
           });
