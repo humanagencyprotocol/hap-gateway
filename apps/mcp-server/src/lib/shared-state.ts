@@ -66,20 +66,30 @@ export class SharedState {
   getEnrichedAuthorizations(): EnrichedAuthorization[] {
     const authorizations = this.cache.getAllAuthorizations();
 
+    if (authorizations.length > 0) {
+      const allGates = this.gateStore.getAll();
+      console.error(`[EnrichDebug] ${authorizations.length} auth(s), ${allGates.length} gate(s)`);
+      for (const a of authorizations) {
+        console.error(`[EnrichDebug] Auth: path="${a.path}" profileId="${a.profileId}" boundsHash="${a.boundsHash}" complete=${a.complete}`);
+      }
+      for (const g of allGates) {
+        console.error(`[EnrichDebug] Gate: path="${g.path}" profileId="${g.profileId}" boundsHash="${g.boundsHash}"`);
+      }
+    }
+
     return authorizations
       .map(auth => {
-        // Try multiple keys to find gate content:
-        // 1. auth.path (may be profileId in v0.4, or old path name in v0.3)
-        // 2. auth.profileId (v0.4: path = profileId)
-        // 3. auth.boundsHash / auth.frameHash (gate content stored by hash)
         const gateEntry =
           this.gateStore.get(auth.path) ??
           this.gateStore.get(auth.profileId) ??
           (auth.boundsHash ? this.gateStore.get(auth.boundsHash) : null) ??
           (auth.frameHash ? this.gateStore.get(auth.frameHash) : null) ??
-          // Search by profileId match across all gate entries
           this.gateStore.getAll().find(g => g.profileId === auth.profileId) ??
           null;
+
+        if (!gateEntry) {
+          console.error(`[EnrichDebug] NO MATCH for auth path="${auth.path}" profileId="${auth.profileId}"`);
+        }
 
         return {
           ...auth,

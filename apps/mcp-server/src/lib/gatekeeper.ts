@@ -73,6 +73,8 @@ export class MCPGatekeeper {
     // (from authorization) differs from the execution context (from tool call).
     const resolvedBounds = override?.bounds ?? auth.bounds ?? auth.frame;
 
+    // Ensure profile is present with the full URI — needed for profile resolution.
+    // The bounds may have the short name ('customers') or full URI; use full URI from auth.
     const frame = { ...resolvedBounds, profile: auth.profileId };
 
     const request: GatekeeperRequest = {
