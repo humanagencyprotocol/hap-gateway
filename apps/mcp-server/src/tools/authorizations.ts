@@ -54,7 +54,7 @@ function buildCapabilityMap(
       readOnly.push(tool.originalName);
     } else if (override !== undefined) {
       // Has specific override — this is a gated tool
-      const mappingDesc = Object.entries(override.executionMapping)
+      const mappingDesc = Object.entries(override.executionMapping ?? {})
         .map(([arg, mapping]) => {
           if (typeof mapping === 'string') return `${mapping} from ${arg}`;
           return `${mapping.field} from ${arg} (/${mapping.divisor})`;
@@ -65,7 +65,7 @@ function buildCapabilityMap(
     } else {
       // Falls through to default gating
       const defaultAction = toolGating.default.staticExecution?.action_type;
-      if (defaultAction === 'read' && Object.keys(toolGating.default.executionMapping).length === 0) {
+      if (defaultAction === 'read' && Object.keys(toolGating.default.executionMapping ?? {}).length === 0) {
         defaultGated.push(tool.originalName);
       } else {
         gated.push(`      - ${tool.originalName}: ${defaultAction ?? 'default'} (default gating)`);

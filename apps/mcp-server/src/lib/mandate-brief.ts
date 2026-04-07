@@ -37,7 +37,7 @@ function countToolsByGating(
       readOnly++;
     } else if (tool.gating.profile === profileId || tool.gating.profile === shortProfileName(profileId)) {
       // Tool is associated with this profile
-      if (tool.gating.staticExecution?.action_type === 'read' && Object.keys(tool.gating.executionMapping).length === 0) {
+      if (tool.gating.staticExecution?.action_type === 'read' && Object.keys(tool.gating.executionMapping ?? {}).length === 0) {
         readOnly++;
       } else {
         gated++;

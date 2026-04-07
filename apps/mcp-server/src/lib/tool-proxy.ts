@@ -286,7 +286,7 @@ export function buildProxiedToolDescription(
   if (tool.gating.staticExecution?.action_type) {
     parts.push(String(tool.gating.staticExecution.action_type));
   }
-  const mappedFields = Object.values(tool.gating.executionMapping).flatMap(m =>
+  const mappedFields = Object.values(tool.gating.executionMapping ?? {}).flatMap(m =>
     typeof m === 'string' ? [m] : Array.isArray(m) ? m.map(e => e.field) : [m.field],
   );
   if (mappedFields.length > 0) {
