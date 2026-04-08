@@ -6,14 +6,12 @@ import { computeBoundsHashBrowser, computeContextHashBrowser, hashGateContent } 
 import { StepIndicator } from '../components/StepIndicator';
 import { DomainBadge } from '../components/DomainBadge';
 import { profileDisplayName } from '../lib/profile-display';
-import type { AgentProfile, AgentBoundsParams, AgentContextParams, AgentFrameParams } from '@hap/core';
+import type { AgentProfile, AgentBoundsParams, AgentContextParams } from '@hap/core';
 
 interface GateData {
   bounds: AgentBoundsParams;
   context: AgentContextParams;
-  gateContent: { intent: string; problem?: string; objective?: string; tradeoffs?: string };
-  // Keep frame for backward compat with existing session storage
-  frame?: AgentFrameParams;
+  gateContent: { intent: string };
 }
 
 interface AuthData {
@@ -47,12 +45,10 @@ export function AgentReviewPage() {
     const auth: AuthData = JSON.parse(authStored);
     const gate = JSON.parse(gateStored);
 
-    // Normalize stored gate data: support both v0.3 (frame) and v0.4 (bounds/context)
     const normalizedGate: GateData = {
-      bounds: gate.bounds ?? gate.frame ?? {},
+      bounds: gate.bounds ?? {},
       context: gate.context ?? {},
       gateContent: gate.gateContent,
-      frame: gate.frame,
     };
 
     setAuthData(auth);

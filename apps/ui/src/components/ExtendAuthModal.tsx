@@ -52,10 +52,8 @@ export function ExtendAuthModal({ item, onClose, onSuccess }: Props) {
       const boundsHash = await computeBoundsHashBrowser(bounds, profile);
       const contextHash = await computeContextHashBrowser(context, profile);
 
-      const [problemHash, objectiveHash, tradeoffsHash, ecHash] = await Promise.all([
-        hashGateContent(gateEntry.gateContent.problem),
-        hashGateContent(gateEntry.gateContent.objective),
-        hashGateContent(gateEntry.gateContent.tradeoffs),
+      const [intentHash, ecHash] = await Promise.all([
+        hashGateContent(gateEntry.gateContent.intent),
         hashGateContent(JSON.stringify({
           profile: item.profile_id,
           path: item.path,
@@ -72,7 +70,7 @@ export function ExtendAuthModal({ item, onClose, onSuccess }: Props) {
         context_hash: contextHash,
         domain,
         did: user.did,
-        gate_content_hashes: { problem: problemHash, objective: objectiveHash, tradeoffs: tradeoffsHash },
+        gate_content_hashes: { intent: intentHash },
         execution_context_hash: ecHash,
         ttl: selectedTTL,
       });

@@ -50,7 +50,7 @@
         "executionMapping": {
           "visibility": "audience"
         },
-        "staticExecution": { "allowed_platforms": "linkedin", "content_type": "link" }
+        "staticExecution": { "allowed_platforms": "linkedin", "content_type": "article" }
       },
       "delete_post": {
         "executionMapping": {},

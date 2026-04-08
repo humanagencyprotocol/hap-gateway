@@ -269,23 +269,14 @@ export function AuthorizationsPage() {
 
                     {/* Gate content (lazy loaded) */}
                     <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '1rem', marginBottom: '0.25rem' }}>
-                      Gates
+                      Intent
                     </div>
                     {gateLoading === item.frame_hash ? (
                       <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>Loading gate content...</p>
                     ) : gateEntry ? (
                       <div className="gate-content-block">
                         <div className="gate-content-item">
-                          <div className="gate-content-label">Problem</div>
-                          <div className="gate-content-text">{gateEntry.gateContent.problem}</div>
-                        </div>
-                        <div className="gate-content-item">
-                          <div className="gate-content-label">Objective</div>
-                          <div className="gate-content-text">{gateEntry.gateContent.objective}</div>
-                        </div>
-                        <div className="gate-content-item">
-                          <div className="gate-content-label">Tradeoffs</div>
-                          <div className="gate-content-text">{gateEntry.gateContent.tradeoffs}</div>
+                          <div className="gate-content-text">{gateEntry.gateContent.intent}</div>
                         </div>
                       </div>
                     ) : (

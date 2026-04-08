@@ -103,8 +103,7 @@ export function GateWizardPage() {
 
   const handleIntentNext = () => {
     const ttlConfig = profile?.ttl;
-    // Store as { intent } for v0.4, also populate legacy fields for backward compat
-    const gateContent = { intent, problem: intent, objective: intent, tradeoffs: intent };
+    const gateContent = { intent };
     sessionStorage.setItem('agentGate', JSON.stringify({ bounds, context, gateContent, ttlConfig }));
     navigate('/agent/review');
   };

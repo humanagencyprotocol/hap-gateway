@@ -3,7 +3,7 @@
  *
  * No argument: compact overview of all active authorities (refreshed).
  * With domain: full detail for matching authority — bounds, consumption,
- *   problem/objective/tradeoffs, and capability map.
+ *   intent, and capability map.
  */
 
 import type { SharedState } from '../lib/shared-state';
@@ -162,15 +162,9 @@ export function listAuthorizationsHandler(
         }
 
         // Gate content
-        if (auth.gateContent) {
+        if (auth.gateContent?.intent) {
           output.push('');
-          if (auth.gateContent.intent) {
-            output.push(`  Intent: ${auth.gateContent.intent}`);
-          } else {
-            if (auth.gateContent.problem) output.push(`  Problem: ${auth.gateContent.problem}`);
-            if (auth.gateContent.objective) output.push(`  Objective: ${auth.gateContent.objective}`);
-            if (auth.gateContent.tradeoffs) output.push(`  Tradeoffs: ${auth.gateContent.tradeoffs}`);
-          }
+          output.push(`  Intent: ${auth.gateContent.intent}`);
         }
 
         // Pending domain info

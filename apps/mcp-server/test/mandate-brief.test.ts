@@ -24,9 +24,7 @@ function mockAuth(overrides: Partial<EnrichedAuthorization> = {}): EnrichedAutho
     attestedDomains: ['finance'],
     complete: true,
     gateContent: {
-      problem: 'Enable automated purchasing',
-      objective: 'Allow agent to process payments',
-      tradeoffs: 'Accepts risk of charges up to limits',
+      intent: 'Enable automated purchasing. Allow agent to process payments. Accepts risk of charges up to limits.',
     },
     ...overrides,
   };
@@ -53,8 +51,7 @@ describe('buildMandateBrief', () => {
     expect(brief).toContain('charge@0.3');
     expect(brief).toContain('Bounds:');
     expect(brief).toContain('amount_max: 100');
-    expect(brief).toContain('Problem: Enable automated purchasing');
-    expect(brief).toContain('Objective: Allow agent to process payments');
+    expect(brief).toContain('Intent: Enable automated purchasing');
   });
 
   it('includes pending authorities with missing domains', () => {

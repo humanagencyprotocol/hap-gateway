@@ -44,7 +44,7 @@ export const PROVIDER_PRESETS: Record<string, AIConfig> = {
 };
 
 export interface AIAssistRequest {
-  gate: 'intent' | 'problem' | 'objective' | 'tradeoffs';
+  gate: 'intent';
   currentText: string;
   context?: {
     profileId?: string;
@@ -83,19 +83,6 @@ You must NOT:
 - Propose specific wording
 
 Keep responses to 2-3 short paragraphs. Be practical and specific to the context.`,
-
-  // v0.3 compat — kept for existing deployments
-  problem: `You are a reviewing assistant helping a human articulate what problem an agent authorization addresses.
-Your role: Help think through what problem needs solving. Surface observations. Ask clarifying questions.
-You must NOT propose wording or make decisions. Keep responses to 2-3 short paragraphs.`,
-
-  objective: `You are a reviewing assistant helping a human articulate what an agent should achieve.
-Your role: Help think through what success looks like. Surface gaps.
-You must NOT suggest a better objective or make recommendations. Keep responses to 2-3 short paragraphs.`,
-
-  tradeoffs: `You are a reviewing assistant helping a human reflect on risks and tradeoffs.
-Your role: Surface risks. Ask about constraints. Help identify what could go wrong.
-You must NOT recommend specific tradeoffs or judge acceptability. Keep responses to 2-3 short paragraphs.`,
 };
 
 export async function getAIAssistance(
@@ -104,7 +91,7 @@ export async function getAIAssistance(
 ): Promise<AIAssistResponse> {
   const disclaimer = 'AI surfaces reality. You supply intent.';
 
-  const systemPrompt = SYSTEM_PROMPTS[request.gate] ?? SYSTEM_PROMPTS.problem;
+  const systemPrompt = SYSTEM_PROMPTS[request.gate] ?? SYSTEM_PROMPTS.intent;
 
   const contextParts: string[] = [];
   if (request.context?.profileId) contextParts.push(`Profile: ${request.context.profileId}`);

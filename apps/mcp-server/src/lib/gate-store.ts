@@ -16,11 +16,7 @@ import { dirname, join } from 'node:path';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 export interface GateContent {
-  intent?: string;
-  // v0.3 compat
-  problem?: string;
-  objective?: string;
-  tradeoffs?: string;
+  intent: string;
 }
 
 export interface GateEntry {

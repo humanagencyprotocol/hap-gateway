@@ -43,7 +43,7 @@ export function createAIRouter(vault: Vault): Router {
 
     const request = req.body as AIAssistRequest;
     if (!request.gate) {
-      res.status(400).json({ error: 'Missing gate field (problem|objective|tradeoffs)' });
+      res.status(400).json({ error: 'Missing gate field (intent)' });
       return;
     }
 

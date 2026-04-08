@@ -109,15 +109,8 @@ export function buildMandateBrief(opts: MandateBriefOptions): string {
         }
       }
 
-      if (auth.gateContent) {
-        if (auth.gateContent.intent) {
-          lines.push(`  Intent: ${auth.gateContent.intent}`);
-        } else {
-          // v0.3 compat
-          if (auth.gateContent.problem) lines.push(`  Problem: ${auth.gateContent.problem}`);
-          if (auth.gateContent.objective) lines.push(`  Objective: ${auth.gateContent.objective}`);
-          if (auth.gateContent.tradeoffs) lines.push(`  Tradeoffs: ${auth.gateContent.tradeoffs}`);
-        }
+      if (auth.gateContent?.intent) {
+        lines.push(`  Intent: ${auth.gateContent.intent}`);
       }
 
       // Tool counts
