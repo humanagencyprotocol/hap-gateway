@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { spClient } from '../lib/sp-client';
 import { StepIndicator } from '../components/StepIndicator';
 import { ContextStrip } from '../components/ContextStrip';
@@ -15,9 +15,11 @@ interface AuthData {
 
 export function GateWizardPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialStep = Number(searchParams.get('step')) || 2;
   const [authData, setAuthData] = useState<AuthData | null>(null);
   const [profile, setProfile] = useState<AgentProfile | null>(null);
-  const [step, setStep] = useState(2); // 2=bounds, 3=intent
+  const [step, setStep] = useState(initialStep); // 2=scope+limits, 3=intent
   const [bounds, setBounds] = useState<AgentBoundsParams | null>(null);
   const [context, setContext] = useState<AgentContextParams | null>(null);
   const [intent, setIntent] = useState('');
@@ -32,6 +34,15 @@ export function GateWizardPage() {
     if (!stored) { navigate('/agent/new'); return; }
     const data: AuthData = JSON.parse(stored);
     setAuthData(data);
+
+    // Restore previous selections if user navigated back
+    const gateStored = sessionStorage.getItem('agentGate');
+    if (gateStored) {
+      const gate = JSON.parse(gateStored);
+      if (gate.bounds) setBounds(gate.bounds);
+      if (gate.context) setContext(gate.context);
+      if (gate.gateContent?.intent) setIntent(gate.gateContent.intent);
+    }
 
     spClient.getProfile(data.profileId)
       .then(p => setProfile(p))
@@ -49,6 +60,44 @@ export function GateWizardPage() {
   const handleBoundsConfirm = (b: AgentBoundsParams, c: AgentContextParams) => {
     setBounds(b);
     setContext(c);
+
+    // Suggest intent from selected scope + bounds
+    if (!intent.trim() && profile) {
+      const parts: string[] = [];
+
+      // Context fields (scope)
+      const contextSchema = profile.contextSchema;
+      if (contextSchema) {
+        for (const key of contextSchema.keyOrder) {
+          const val = c[key];
+          if (val !== undefined && val !== '') {
+            const field = contextSchema.fields[key];
+            const label = field?.displayName ?? key.replace(/_/g, ' ');
+            const values = String(val).split(',').map(s => s.trim()).filter(Boolean);
+            parts.push(`${label}: ${values.join(', ')}`);
+          }
+        }
+      }
+
+      // Bounds fields (limits)
+      const boundsSchema = profile.boundsSchema ?? profile.frameSchema;
+      if (boundsSchema) {
+        for (const key of boundsSchema.keyOrder) {
+          if (key === 'profile' || key === 'path') continue;
+          const val = b[key];
+          if (val !== undefined && val !== '' && val !== 0) {
+            const field = boundsSchema.fields[key];
+            const label = field?.displayName ?? key.replace(/_/g, ' ');
+            parts.push(`${label}: ${val}`);
+          }
+        }
+      }
+
+      if (parts.length > 0) {
+        setIntent(parts.join('. ') + '.');
+      }
+    }
+
     setStep(3);
   };
 

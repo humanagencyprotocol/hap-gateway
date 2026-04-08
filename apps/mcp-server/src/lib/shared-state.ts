@@ -66,17 +66,6 @@ export class SharedState {
   getEnrichedAuthorizations(): EnrichedAuthorization[] {
     const authorizations = this.cache.getAllAuthorizations();
 
-    if (authorizations.length > 0) {
-      const allGates = this.gateStore.getAll();
-      console.error(`[EnrichDebug] ${authorizations.length} auth(s), ${allGates.length} gate(s)`);
-      for (const a of authorizations) {
-        console.error(`[EnrichDebug] Auth: path="${a.path}" profileId="${a.profileId}" boundsHash="${a.boundsHash}" complete=${a.complete}`);
-      }
-      for (const g of allGates) {
-        console.error(`[EnrichDebug] Gate: path="${g.path}" profileId="${g.profileId}" boundsHash="${g.boundsHash}"`);
-      }
-    }
-
     return authorizations
       .map(auth => {
         const gateEntry =
@@ -86,10 +75,6 @@ export class SharedState {
           (auth.frameHash ? this.gateStore.get(auth.frameHash) : null) ??
           this.gateStore.getAll().find(g => g.profileId === auth.profileId) ??
           null;
-
-        if (!gateEntry) {
-          console.error(`[EnrichDebug] NO MATCH for auth path="${auth.path}" profileId="${auth.profileId}"`);
-        }
 
         return {
           ...auth,

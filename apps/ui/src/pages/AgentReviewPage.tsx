@@ -65,7 +65,28 @@ export function AgentReviewPage() {
     }
 
     spClient.getProfile(auth.profileId)
-      .then(p => setProfile(p))
+      .then(p => {
+        setProfile(p);
+
+        // Auto-generate title from profile name + context scope
+        if (!authTitle) {
+          const shortName = p.name ?? auth.profileId.split('/').pop()?.replace(/@.*$/, '') ?? '';
+          const contextParts: string[] = [];
+          if (normalizedGate.context && p.contextSchema) {
+            for (const key of p.contextSchema.keyOrder) {
+              const val = normalizedGate.context[key];
+              if (val !== undefined && val !== '') {
+                const values = String(val).split(',').map(s => s.trim()).filter(Boolean);
+                contextParts.push(values.join(', '));
+              }
+            }
+          }
+          const title = contextParts.length > 0
+            ? `${shortName}: ${contextParts.join(' · ')}`
+            : shortName;
+          setAuthTitle(title);
+        }
+      })
       .catch(() => {});
   }, [navigate]);
 
@@ -166,7 +187,9 @@ export function AgentReviewPage() {
 
   return (
     <>
-      <StepIndicator currentStep={6} />
+      <StepIndicator currentStep={4} onStepClick={s => {
+        if (s <= 3) navigate(`/agent/gate?step=${s}`);
+      }} />
 
       <div className="card">
         <h3 className="card-title" style={{ marginBottom: '0.25rem' }}>Review &amp; Commit</h3>

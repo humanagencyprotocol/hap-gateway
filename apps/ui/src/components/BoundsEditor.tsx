@@ -25,6 +25,10 @@ function isTagField(field: FieldDef): boolean {
   return field.type === 'string' && (field.format === 'email' || field.format === 'domain');
 }
 
+function isSubsetEnumField(field: FieldDef): boolean {
+  return !!(field.enum && field.constraint?.enforceable.includes('subset'));
+}
+
 function validateTag(value: string, format: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
@@ -201,6 +205,47 @@ function TagInput({
   );
 }
 
+// ─── CheckboxGroup (multi-select for subset + enum) ──────────────────────
+
+function CheckboxGroup({
+  id,
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const selected = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const toggle = (opt: string) => {
+    const updated = selected.includes(opt)
+      ? selected.filter(s => s !== opt)
+      : [...selected, opt];
+    onChange(updated.join(','));
+  };
+
+  return (
+    <div className="checkbox-group" id={id}>
+      {options.map(opt => (
+        <label key={opt} className={`checkbox-pill${selected.includes(opt) ? ' checkbox-pill-selected' : ''}`}>
+          <input
+            type="checkbox"
+            checked={selected.includes(opt)}
+            onChange={() => toggle(opt)}
+            disabled={disabled}
+          />
+          <span>{opt}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 // ─── FieldRow ───────────────────────────────────────────────────────────────
 
 function FieldRow({
@@ -226,7 +271,15 @@ function FieldRow({
 
   const input = (
     <>
-      {'enum' in fieldDef && fieldDef.enum ? (
+      {isSubsetEnumField(fieldDef) ? (
+        <CheckboxGroup
+          id={fieldId}
+          options={fieldDef.enum!}
+          value={value}
+          onChange={v => onChange(fieldKey, v)}
+          disabled={readOnly}
+        />
+      ) : 'enum' in fieldDef && fieldDef.enum ? (
         <select
           id={fieldId}
           className="form-select"
@@ -383,6 +436,29 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
 
   return (
     <div>
+      {contextFields.length > 0 && (
+        <div className="context-section">
+          <div className="bounds-section-header">
+            <span className="bounds-section-icon">&#x1F6E1;</span>
+            <div>
+              <div className="bounds-section-title">Allowed scope</div>
+              <div className="bounds-section-subtitle">Encrypted on your device, never sent to the SP</div>
+            </div>
+          </div>
+          {contextFields.map(([key, fieldDef]) => (
+            <FieldRow
+              key={`context-${key}`}
+              fieldKey={key}
+              fieldDef={fieldDef}
+              value={contextValues[key]}
+              onChange={handleContextChange}
+              prefix="context"
+              readOnly={readOnly}
+            />
+          ))}
+        </div>
+      )}
+
       {boundsFields.length > 0 && (
         <div className="bounds-section">
           <div className="bounds-section-header">
@@ -406,29 +482,6 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
               />
             ))}
           </div>
-        </div>
-      )}
-
-      {contextFields.length > 0 && (
-        <div className="context-section">
-          <div className="bounds-section-header">
-            <span className="bounds-section-icon">&#x1F6E1;</span>
-            <div>
-              <div className="bounds-section-title">Allowed scope</div>
-              <div className="bounds-section-subtitle">Encrypted on your device, never sent to the SP</div>
-            </div>
-          </div>
-          {contextFields.map(([key, fieldDef]) => (
-            <FieldRow
-              key={`context-${key}`}
-              fieldKey={key}
-              fieldDef={fieldDef}
-              value={contextValues[key]}
-              onChange={handleContextChange}
-              prefix="context"
-              readOnly={readOnly}
-            />
-          ))}
         </div>
       )}
 
