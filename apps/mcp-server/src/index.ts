@@ -140,7 +140,7 @@ export function createMcpServer(
         proposal_id: z.string().optional().describe('Specific proposal ID to check. Omit to see all.'),
       },
     },
-    checkPendingCommitmentsHandler(state)
+    checkPendingCommitmentsHandler(state, integrationManager)
   );
 
   // ─── Proxied tools from downstream integrations ──────────────────────────
