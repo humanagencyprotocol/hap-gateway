@@ -18,7 +18,6 @@ import { Vault } from './lib/vault';
 import { createAuthRouter } from './routes/auth';
 import { createVaultRouter } from './routes/vault';
 import { createAIRouter } from './routes/ai';
-import { createGitHubRouter } from './routes/github';
 import { requireAuth } from './middleware/auth';
 import { pushGateContent, pushServiceCredentials, setInternalSecret, getManifests, getGateContent } from './lib/mcp-bridge';
 import { createMCPRouter } from './routes/mcp';
@@ -229,9 +228,6 @@ app.use('/vault', jsonParser, authGuard, createVaultRouter(vault));
 
 // AI routes
 app.use('/ai', jsonParser, authGuard, createAIRouter(vault));
-
-// GitHub routes
-app.use('/github', jsonParser, authGuard, createGitHubRouter(vault));
 
 // MCP integration management routes
 app.use('/mcp', jsonParser, authGuard, createMCPRouter());

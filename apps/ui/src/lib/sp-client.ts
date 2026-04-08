@@ -74,55 +74,6 @@ export interface VaultStatus {
   serviceCount: number;
 }
 
-export interface ServiceDef {
-  id: string;
-  name: string;
-  description: string;
-  icon?: string;
-  tools?: string[];
-  profile?: string;
-  status: 'connected' | 'missing' | 'error';
-  credFields: Array<{ label: string; key: string; type: 'text' | 'password'; placeholder?: string }>;
-}
-
-export interface AIPresets {
-  presets: Record<string, { provider: string; endpoint: string; model: string }>;
-}
-
-export interface GitHubRepo {
-  fullName: string;
-  description: string | null;
-  private: boolean;
-  updatedAt: string;
-}
-
-export interface GitHubPull {
-  number: number;
-  title: string;
-  author: string;
-  branch: string;
-  base: string;
-  sha: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface GitHubPullDetail extends GitHubPull {
-  body: string | null;
-  additions: number;
-  deletions: number;
-  filesChanged: number;
-  files: Array<{ path: string; additions: number; deletions: number; status: string }>;
-}
-
-export interface GitHubPullFile {
-  path: string;
-  additions: number;
-  deletions: number;
-  status: string;
-  patch: string | null;
-}
-
 export interface IntegrationManifest {
   id: string;
   name: string;
@@ -436,13 +387,6 @@ class SPClient {
     if (!res.ok) throw new Error(`Failed to save credential: ${res.status}`);
   }
 
-  async deleteCredential(name: string): Promise<void> {
-    const res = await this.fetch(`/vault/credentials/${encodeURIComponent(name)}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) throw new Error(`Failed to delete credential: ${res.status}`);
-  }
-
   async testCredential(name: string): Promise<{ ok: boolean; message: string }> {
     const res = await this.fetch(`/vault/test/${encodeURIComponent(name)}`, {
       method: 'POST',
@@ -451,36 +395,12 @@ class SPClient {
     return res.json();
   }
 
-  // ─── Services ─────────────────────────────────────────────────────────
-
-  async getServices(): Promise<ServiceDef[]> {
-    const res = await this.fetch('/vault/services');
-    if (!res.ok) throw new Error(`Failed to fetch services: ${res.status}`);
-    const data = await res.json();
-    return data.services;
-  }
-
-  async addService(id: string, service: Omit<ServiceDef, 'status'> & { credentials?: Record<string, string> }): Promise<void> {
-    const res = await this.fetch(`/vault/services/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      body: JSON.stringify(service),
-    });
-    if (!res.ok) throw new Error(`Failed to save service: ${res.status}`);
-  }
-
-  async deleteService(id: string): Promise<void> {
-    const res = await this.fetch(`/vault/services/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) throw new Error(`Failed to delete service: ${res.status}`);
-  }
-
   // ─── AI ───────────────────────────────────────────────────────────────
 
   async aiAssist(request: {
-    gate: 'problem' | 'objective' | 'tradeoffs';
+    gate: 'intent';
     currentText: string;
-    context?: { profileId?: string; path?: string; bounds?: string; prTitle?: string; prBody?: string; prBranch?: string; prFileSummary?: string };
+    context?: { profileId?: string; bounds?: string };
   }): Promise<{ success: boolean; suggestion?: string; error?: string; disclaimer: string }> {
     const res = await this.fetch('/ai/assist', {
       method: 'POST',
@@ -500,41 +420,6 @@ class SPClient {
     });
     if (!res.ok) throw new Error(`AI test failed: ${res.status}`);
     return res.json();
-  }
-
-  async getAIPresets(): Promise<AIPresets> {
-    const res = await this.fetch('/ai/presets');
-    if (!res.ok) throw new Error(`Failed to fetch AI presets: ${res.status}`);
-    return res.json();
-  }
-
-  // ─── GitHub ───────────────────────────────────────────────────────────
-
-  async getGitHubRepos(): Promise<GitHubRepo[]> {
-    const res = await this.fetch('/github/repos');
-    if (!res.ok) throw new Error(`Failed to fetch repos: ${res.status}`);
-    const data = await res.json();
-    return data.repos;
-  }
-
-  async getGitHubPulls(owner: string, repo: string): Promise<GitHubPull[]> {
-    const res = await this.fetch(`/github/pulls?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`);
-    if (!res.ok) throw new Error(`Failed to fetch pulls: ${res.status}`);
-    const data = await res.json();
-    return data.pulls;
-  }
-
-  async getGitHubPull(owner: string, repo: string, number: number): Promise<GitHubPullDetail> {
-    const res = await this.fetch(`/github/pull?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&number=${number}`);
-    if (!res.ok) throw new Error(`Failed to fetch PR: ${res.status}`);
-    return res.json();
-  }
-
-  async getGitHubPullFiles(owner: string, repo: string, number: number): Promise<GitHubPullFile[]> {
-    const res = await this.fetch(`/github/pull-files?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&number=${number}`);
-    if (!res.ok) throw new Error(`Failed to fetch PR files: ${res.status}`);
-    const data = await res.json();
-    return data.files;
   }
 
   // ─── MCP Integrations ──────────────────────────────────────────────────

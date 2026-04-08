@@ -187,16 +187,6 @@ export class SPClient {
   }
 
   /**
-   * Get pending proposals for a domain.
-   */
-  async getProposals(domain: string): Promise<SPProposal[]> {
-    const res = await this.fetch(`/api/proposals?domain=${encodeURIComponent(domain)}`);
-    if (!res.ok) throw new Error(`SP proposals request failed: ${res.status}`);
-    const data = await res.json() as { proposals: SPProposal[] };
-    return data.proposals;
-  }
-
-  /**
    * Get proposals that have been fully committed and are ready for execution.
    */
   async getCommittedProposals(): Promise<SPProposal[]> {
