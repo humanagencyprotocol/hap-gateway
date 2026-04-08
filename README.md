@@ -63,7 +63,7 @@ When an agent connects, it receives a compact authority brief — active authori
 [spend-routine] charge@0.4 (45 min remaining)
   Bounds: amount_max: 100, currency: USD, action_type: charge
   Usage: $234/$500 daily, $1280/$5000 monthly, 8/20 tx
-  Problem: Enable automated purchasing for business operations.
+  Intent: Enable automated purchasing for business operations.
   4 gated tools, 19 read-only
 ```
 
