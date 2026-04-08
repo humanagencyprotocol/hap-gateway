@@ -38,23 +38,23 @@
         "executionMapping": {
           "visibility": "audience"
         },
-        "staticExecution": { "allowed_platforms": "linkedin", "content_type": "text" }
+        "staticExecution": { "allowed_platforms": "linkedin", "content_type": "text", "action_type": "post" }
       },
       "create_image_post": {
         "executionMapping": {
           "visibility": "audience"
         },
-        "staticExecution": { "allowed_platforms": "linkedin", "content_type": "image" }
+        "staticExecution": { "allowed_platforms": "linkedin", "content_type": "image", "action_type": "post" }
       },
       "create_article_post": {
         "executionMapping": {
           "visibility": "audience"
         },
-        "staticExecution": { "allowed_platforms": "linkedin", "content_type": "article" }
+        "staticExecution": { "allowed_platforms": "linkedin", "content_type": "article", "action_type": "post" }
       },
       "delete_post": {
         "executionMapping": {},
-        "staticExecution": { "allowed_platforms": "linkedin" }
+        "staticExecution": { "allowed_platforms": "linkedin", "action_type": "delete" }
       },
       "get_post": { "category": "read" },
       "list_posts": { "category": "read" },
