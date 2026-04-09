@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getConsumptionState, formatConsumptionCompact, formatConsumptionFull } from '../src/lib/consumption';
+import { getConsumptionState, formatConsumptionCompact, formatConsumptionFull, type ConsumptionEntry } from '../src/lib/consumption';
 import type { EnrichedAuthorization } from '../src/lib/shared-state';
 import type { ExecutionLog } from '../src/lib/execution-log';
 import type { AgentProfile } from '@hap/core';
@@ -10,14 +10,12 @@ function mockAuth(overrides: Partial<EnrichedAuthorization> = {}): EnrichedAutho
   const now = Math.floor(Date.now() / 1000);
   return {
     frameHash: 'sha256:abc',
-    profileId: 'github.com/humanagencyprotocol/hap-profiles/charge@0.3',
+    profileId: 'github.com/humanagencyprotocol/hap-profiles/charge@0.4',
     path: 'charge-routine',
     frame: {
-      profile: 'github.com/humanagencyprotocol/hap-profiles/charge@0.3',
+      profile: 'github.com/humanagencyprotocol/hap-profiles/charge@0.4',
       path: 'charge-routine',
       amount_max: 100,
-      currency: 'USD',
-      action_type: 'charge',
       amount_daily_max: 500,
       amount_monthly_max: 5000,
       transaction_count_daily_max: 20,
@@ -25,53 +23,56 @@ function mockAuth(overrides: Partial<EnrichedAuthorization> = {}): EnrichedAutho
     attestations: [{ domain: 'finance', blob: 'blob', expiresAt: now + 3600 }],
     requiredDomains: ['finance'],
     attestedDomains: ['finance'],
+    deferredCommitmentDomains: [],
     complete: true,
     gateContent: null,
     ...overrides,
   };
 }
 
-function mockSpendProfile(): AgentProfile {
+/**
+ * v0.4 charge-like profile with explicit boundType on every bound.
+ * The profile no longer mirrors its cumulative bounds through the
+ * execution context schema — the bounds themselves carry the
+ * enforcement semantics.
+ */
+function mockChargeProfile(): AgentProfile {
   return {
-    id: 'github.com/humanagencyprotocol/hap-profiles/charge@0.3',
-    version: '0.3',
+    id: 'github.com/humanagencyprotocol/hap-profiles/charge@0.4',
+    version: '0.4',
     description: 'Financial authority',
-    frameSchema: { keyOrder: [], fields: {} },
-    executionContextSchema: {
+    boundsSchema: {
+      keyOrder: ['profile', 'amount_max', 'amount_daily_max', 'amount_monthly_max', 'transaction_count_daily_max'],
       fields: {
-        action_type: { source: 'declared', description: 'Financial operation', required: true },
-        amount: { source: 'declared', description: 'Monetary amount', required: true },
-        currency: { source: 'declared', description: 'Currency code', required: true },
-        amount_daily: {
-          source: 'cumulative',
-          cumulativeField: 'amount',
-          window: 'daily',
+        profile: { type: 'string', required: true },
+        amount_max: {
+          type: 'number',
+          required: true,
+          description: 'Maximum amount per transaction',
+          boundType: { kind: 'per_transaction', of: 'amount' },
+        },
+        amount_daily_max: {
+          type: 'number',
+          required: true,
           description: 'Running daily charge total',
-          required: true,
+          boundType: { kind: 'cumulative_sum', of: 'amount', window: 'daily' },
         },
-        amount_monthly: {
-          source: 'cumulative',
-          cumulativeField: 'amount',
-          window: 'monthly',
+        amount_monthly_max: {
+          type: 'number',
+          required: true,
           description: 'Running monthly charge total',
-          required: true,
+          boundType: { kind: 'cumulative_sum', of: 'amount', window: 'monthly' },
         },
-        transaction_count_daily: {
-          source: 'cumulative',
-          cumulativeField: '_count',
-          window: 'daily',
-          description: 'Running daily transaction count',
+        transaction_count_daily_max: {
+          type: 'number',
           required: true,
+          description: 'Running daily transaction count',
+          boundType: { kind: 'cumulative_count', window: 'daily' },
         },
       },
     },
-    executionPaths: {},
+    executionContextSchema: { fields: {} },
     requiredGates: [],
-    gateQuestions: {
-      problem: { question: '', required: true },
-      objective: { question: '', required: true },
-      tradeoffs: { question: '', required: true },
-    },
     ttl: { default: 86400, max: 86400 },
     retention_minimum: 7776000,
   };
@@ -92,18 +93,43 @@ function mockLog(returnValues: Record<string, number> = {}): ExecutionLog {
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
-describe('getConsumptionState', () => {
-  it('returns entries for cumulative fields with limits from frame', () => {
+describe('getConsumptionState (v0.4 bound-driven)', () => {
+  it('returns entries for each cumulative bound with limits from the authorization frame', () => {
     const auth = mockAuth();
-    const profile = mockSpendProfile();
+    const profile = mockChargeProfile();
     const log = mockLog({ amount: 234.5, _count: 8 });
 
     const entries = getConsumptionState(auth, log, profile);
 
+    // 3 cumulative bounds: amount_daily_max, amount_monthly_max, transaction_count_daily_max
+    // The per_transaction amount_max is not a cumulative bound and is skipped.
     expect(entries).toHaveLength(3);
-    expect(entries[0]).toMatchObject({ field: 'amount_daily', current: 234.5, limit: 500, window: 'daily' });
-    expect(entries[1]).toMatchObject({ field: 'amount_monthly', current: 234.5, limit: 5000, window: 'monthly' });
-    expect(entries[2]).toMatchObject({ field: 'transaction_count_daily', current: 8, limit: 20, window: 'daily' });
+
+    const byField = Object.fromEntries(entries.map(e => [e.field, e]));
+
+    expect(byField.amount_daily_max).toMatchObject({
+      field: 'amount_daily_max',
+      current: 234.5,
+      limit: 500,
+      window: 'daily',
+      kind: 'sum',
+      of: 'amount',
+    });
+    expect(byField.amount_monthly_max).toMatchObject({
+      field: 'amount_monthly_max',
+      current: 234.5,
+      limit: 5000,
+      window: 'monthly',
+      kind: 'sum',
+      of: 'amount',
+    });
+    expect(byField.transaction_count_daily_max).toMatchObject({
+      field: 'transaction_count_daily_max',
+      current: 8,
+      limit: 20,
+      window: 'daily',
+      kind: 'count',
+    });
   });
 
   it('returns empty array for undefined profile', () => {
@@ -111,30 +137,139 @@ describe('getConsumptionState', () => {
     expect(entries).toEqual([]);
   });
 
-  it('sets limit to null when frame has no matching _max field', () => {
+  it('returns empty array for profile with no boundsSchema', () => {
+    const profile = {
+      ...mockChargeProfile(),
+      boundsSchema: undefined,
+    } as unknown as AgentProfile;
+    const entries = getConsumptionState(mockAuth(), mockLog(), profile);
+    expect(entries).toEqual([]);
+  });
+
+  it('sets limit to null when the authorization frame has no value for a cumulative bound', () => {
     const auth = mockAuth({
-      frame: { profile: 'charge@0.3', path: 'charge-routine', amount_max: 100, currency: 'USD', action_type: 'charge' },
+      frame: {
+        profile: 'github.com/humanagencyprotocol/hap-profiles/charge@0.4',
+        path: 'charge-routine',
+        amount_max: 100,
+        // amount_daily_max intentionally omitted
+      },
     });
-    const profile = mockSpendProfile();
+    const profile = mockChargeProfile();
     const log = mockLog({ amount: 50 });
 
     const entries = getConsumptionState(auth, log, profile);
-    // amount_daily_max is missing from frame
-    const dailyEntry = entries.find(e => e.field === 'amount_daily');
+    const dailyEntry = entries.find(e => e.field === 'amount_daily_max');
     expect(dailyEntry?.limit).toBeNull();
+    expect(dailyEntry?.current).toBe(50);
+  });
+
+  it('works with non-standard bound field names (no _max suffix parsing)', () => {
+    // Records-style profile where the bound name doesn't follow the
+    // amount_*_max convention. Pre-v0.4 code would strip "_max" and
+    // guess at execution-context field names, which broke for this
+    // kind of naming. The boundType-driven approach doesn't care.
+    const profile: AgentProfile = {
+      id: 'test/records@0.4',
+      version: '0.4',
+      description: 'Records',
+      boundsSchema: {
+        keyOrder: ['profile', 'write_daily_max'],
+        fields: {
+          profile: { type: 'string', required: true },
+          write_daily_max: {
+            type: 'number',
+            required: true,
+            description: 'Daily writes',
+            boundType: { kind: 'cumulative_count', window: 'daily' },
+          },
+        },
+      },
+      executionContextSchema: { fields: {} },
+      requiredGates: [],
+      ttl: { default: 86400, max: 86400 },
+      retention_minimum: 7776000,
+    };
+    const auth = mockAuth({
+      profileId: 'test/records@0.4',
+      frame: { profile: 'test/records@0.4', write_daily_max: 5 },
+    });
+    const log = mockLog({ _count: 3 });
+
+    const entries = getConsumptionState(auth, log, profile);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      field: 'write_daily_max',
+      current: 3,
+      limit: 5,
+      kind: 'count',
+    });
   });
 });
 
-describe('formatConsumptionCompact', () => {
-  it('formats charge entries as compact string', () => {
-    const entries = [
-      { label: 'Daily charge', current: 234, limit: 500, window: 'daily', field: 'amount_daily' },
-      { label: 'Monthly charge', current: 1280, limit: 5000, window: 'monthly', field: 'amount_monthly' },
-      { label: 'Daily tx count', current: 8, limit: 20, window: 'daily', field: 'transaction_count_daily' },
+describe('formatConsumptionCompact (v0.4 kind-driven)', () => {
+  it('formats a mix of sum and count entries with currency prefix for amount sums', () => {
+    const entries: ConsumptionEntry[] = [
+      {
+        label: 'Running daily charge total',
+        current: 234,
+        limit: 500,
+        window: 'daily',
+        field: 'amount_daily_max',
+        kind: 'sum',
+        of: 'amount',
+      },
+      {
+        label: 'Running monthly charge total',
+        current: 1280,
+        limit: 5000,
+        window: 'monthly',
+        field: 'amount_monthly_max',
+        kind: 'sum',
+        of: 'amount',
+      },
+      {
+        label: 'Running daily transaction count',
+        current: 8,
+        limit: 20,
+        window: 'daily',
+        field: 'transaction_count_daily_max',
+        kind: 'count',
+      },
     ];
 
     const result = formatConsumptionCompact(entries);
-    expect(result).toBe('$234/$500 daily, $1280/$5000 monthly, 8/20 tx');
+    expect(result).toBe('$234/$500 daily, $1280/$5000 monthly, 8/20 daily');
+  });
+
+  it('formats a spend-based sum with currency prefix', () => {
+    const entries: ConsumptionEntry[] = [
+      {
+        label: 'Running daily spend',
+        current: 42,
+        limit: 100,
+        window: 'daily',
+        field: 'spend_daily_max',
+        kind: 'sum',
+        of: 'spend',
+      },
+    ];
+    expect(formatConsumptionCompact(entries)).toBe('$42/$100 daily');
+  });
+
+  it('omits currency prefix for non-currency sums', () => {
+    const entries: ConsumptionEntry[] = [
+      {
+        label: 'Running daily tokens',
+        current: 1500,
+        limit: 10000,
+        window: 'daily',
+        field: 'tokens_daily_max',
+        kind: 'sum',
+        of: 'tokens',
+      },
+    ];
+    expect(formatConsumptionCompact(entries)).toBe('1500/10000 daily');
   });
 
   it('returns empty string for no entries', () => {
@@ -142,18 +277,41 @@ describe('formatConsumptionCompact', () => {
   });
 
   it('skips entries with null limit', () => {
-    const entries = [
-      { label: 'Some field', current: 10, limit: null, window: 'daily', field: 'amount_daily' },
+    const entries: ConsumptionEntry[] = [
+      {
+        label: 'Some field',
+        current: 10,
+        limit: null,
+        window: 'daily',
+        field: 'amount_daily_max',
+        kind: 'sum',
+        of: 'amount',
+      },
     ];
     expect(formatConsumptionCompact(entries)).toBe('');
   });
 });
 
 describe('formatConsumptionFull', () => {
-  it('formats entries with aligned labels', () => {
-    const entries = [
-      { label: 'Running daily charge total', current: 234, limit: 500, window: 'daily', field: 'amount_daily' },
-      { label: 'Running daily transaction count', current: 8, limit: 20, window: 'daily', field: 'transaction_count_daily' },
+  it('formats entries with aligned labels and concrete limits', () => {
+    const entries: ConsumptionEntry[] = [
+      {
+        label: 'Running daily charge total',
+        current: 234,
+        limit: 500,
+        window: 'daily',
+        field: 'amount_daily_max',
+        kind: 'sum',
+        of: 'amount',
+      },
+      {
+        label: 'Running daily transaction count',
+        current: 8,
+        limit: 20,
+        window: 'daily',
+        field: 'transaction_count_daily_max',
+        kind: 'count',
+      },
     ];
 
     const result = formatConsumptionFull(entries);
@@ -164,8 +322,15 @@ describe('formatConsumptionFull', () => {
   });
 
   it('shows unlimited for null limits', () => {
-    const entries = [
-      { label: 'Some field', current: 10, limit: null, window: 'daily', field: 'foo' },
+    const entries: ConsumptionEntry[] = [
+      {
+        label: 'Some field',
+        current: 10,
+        limit: null,
+        window: 'daily',
+        field: 'foo_daily_max',
+        kind: 'count',
+      },
     ];
     const result = formatConsumptionFull(entries);
     expect(result).toContain('10 / unlimited');

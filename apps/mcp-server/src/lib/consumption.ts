@@ -1,71 +1,105 @@
 /**
- * Consumption State — resolves cumulative usage from execution log and profile schema.
+ * Consumption State — resolves cumulative usage from execution log and
+ * profile schema.
+ *
+ * v0.4: driven by `profile.boundsSchema.fields` and each field's declared
+ * `boundType`. The display iterates the profile's bounds directly; for
+ * cumulative_sum and cumulative_count bounds it queries the execution
+ * log using the boundType's declared `of` (sum) or '_count' (count).
+ * No name-pattern heuristics — `${ctxFieldName}_max` style lookups are
+ * gone, which means profiles with naming quirks (write_count_daily →
+ * write_daily_max, etc.) now display correctly without any per-profile
+ * fallback code.
  *
  * Used by mandate-brief (compact) and list-authorizations (full detail).
  */
 
-import type { AgentProfile, CumulativeFieldDef } from '@hap/core';
+import type { AgentProfile, ProfileBoundsField, CumulativeWindow } from '@hap/core';
 import type { ExecutionLog } from './execution-log';
 import type { EnrichedAuthorization } from './shared-state';
 
 export interface ConsumptionEntry {
-  /** Human-readable label, e.g. "Daily charge" */
+  /** Human-readable label, e.g. "Daily create limit" */
   label: string;
   /** Current cumulative value */
   current: number;
-  /** Max limit from frame bounds, or null if no matching bound */
+  /** Max limit from the bound, or null if no numeric bound is set */
   limit: number | null;
-  /** Time window */
-  window: string;
-  /** The cumulative field name in the execution context schema */
+  /** Time window ("daily", "weekly", or "monthly") */
+  window: CumulativeWindow;
+  /** The bounds field name (e.g., "write_daily_max") */
   field: string;
+  /** "sum" = summed numeric value (currency-like), "count" = number of calls */
+  kind: 'sum' | 'count';
+  /** For sum kind: the execution context field being summed (e.g., "amount", "spend"). Undefined for count. */
+  of?: string;
 }
 
 /**
- * Compute consumption state for an authorization by iterating
- * the profile's cumulative execution context fields.
+ * Compute consumption state for an authorization by walking the profile's
+ * bounds schema and dispatching on each bound's declared boundType.
+ *
+ * Only `cumulative_sum` and `cumulative_count` bounds produce consumption
+ * entries — per-transaction and enum bounds don't have running totals.
  */
 export function getConsumptionState(
   auth: EnrichedAuthorization,
   executionLog: ExecutionLog,
   profile: AgentProfile | undefined,
 ): ConsumptionEntry[] {
-  if (!profile) return [];
+  if (!profile?.boundsSchema?.fields) return [];
 
   const entries: ConsumptionEntry[] = [];
   const now = Math.floor(Date.now() / 1000);
 
-  for (const [fieldName, fieldDef] of Object.entries(profile.executionContextSchema.fields)) {
-    if (fieldDef.source !== 'cumulative') continue;
+  for (const [fieldName, rawFieldDef] of Object.entries(profile.boundsSchema.fields)) {
+    if (fieldName === 'profile' || fieldName === 'path') continue;
 
-    const cumDef = fieldDef as CumulativeFieldDef;
+    const fieldDef = rawFieldDef as ProfileBoundsField;
+    const bt = fieldDef.boundType;
+    if (!bt) continue; // non-v0.4 bound or missing declaration
+
+    // Only cumulative bounds have a "consumption" value to report.
+    if (bt.kind !== 'cumulative_sum' && bt.kind !== 'cumulative_count') continue;
+
+    const boundValue = auth.frame[fieldName];
+    const limit = typeof boundValue === 'number' ? boundValue : null;
+
+    const cumulativeField = bt.kind === 'cumulative_count' ? '_count' : bt.of;
     const current = executionLog.sumByWindow(
       auth.profileId,
       auth.path,
-      cumDef.cumulativeField,
-      cumDef.window,
+      cumulativeField,
+      bt.window,
       now,
     );
 
-    // Look up the corresponding _max bound in the frame
-    const maxKey = `${fieldName}_max`;
-    const limit = typeof auth.frame[maxKey] === 'number' ? auth.frame[maxKey] as number : null;
-
     entries.push({
-      label: fieldDef.description,
+      label: fieldDef.description ?? fieldName,
       current,
       limit,
-      window: cumDef.window,
+      window: bt.window,
       field: fieldName,
+      kind: bt.kind === 'cumulative_sum' ? 'sum' : 'count',
+      of: bt.kind === 'cumulative_sum' ? bt.of : undefined,
     });
   }
 
   return entries;
 }
 
+// Which "of" field names indicate a currency amount (so we prefix with "$").
+// This is a display hint, not a semantic check — the underlying enforcement
+// doesn't care. Profiles that use different names for money-denominated
+// cumulative sums can be added here without affecting correctness.
+const CURRENCY_SUM_FIELDS = new Set(['amount', 'spend']);
+
 /**
  * Format consumption as a compact single line for the mandate brief.
- * e.g. "$234/$500 daily, 8/20 tx"
+ * e.g. "$234/$500 daily, 8/20 tx daily"
+ *
+ * Dispatches on entry.kind (sum vs count) and entry.of (currency hint)
+ * rather than parsing bound field names.
  */
 export function formatConsumptionCompact(entries: ConsumptionEntry[]): string {
   if (entries.length === 0) return '';
@@ -74,14 +108,11 @@ export function formatConsumptionCompact(entries: ConsumptionEntry[]): string {
   for (const entry of entries) {
     if (entry.limit === null) continue;
 
-    // Use short labels based on field name patterns
-    if (entry.field.startsWith('amount_daily')) {
-      parts.push(`$${entry.current}/$${entry.limit} daily`);
-    } else if (entry.field.startsWith('amount_monthly')) {
-      parts.push(`$${entry.current}/$${entry.limit} monthly`);
-    } else if (entry.field.startsWith('transaction_count')) {
-      parts.push(`${entry.current}/${entry.limit} tx`);
+    if (entry.kind === 'sum') {
+      const prefix = entry.of && CURRENCY_SUM_FIELDS.has(entry.of) ? '$' : '';
+      parts.push(`${prefix}${entry.current}/${prefix}${entry.limit} ${entry.window}`);
     } else {
+      // count kind — e.g. "3/5 daily"
       parts.push(`${entry.current}/${entry.limit} ${entry.window}`);
     }
   }
