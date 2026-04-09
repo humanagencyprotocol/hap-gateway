@@ -45,12 +45,29 @@ async function executeCommitted(
   // Request a signed receipt FIRST — this atomically transitions the
   // proposal to executed. If another path (e.g. the background loop) has
   // already consumed it, the SP returns PROPOSAL_ALREADY_EXECUTED.
+  //
+  // `action` MUST be proposal.tool (the full namespaced name) for the
+  // SP's PROPOSAL_MISMATCH equality check. `actionType` comes from the
+  // executionContext that was captured at proposal creation time (from
+  // the manifest's staticExecution) — no prefix-based fallback.
+  const proposalActionType =
+    typeof proposal.executionContext.action_type === 'string'
+      ? proposal.executionContext.action_type
+      : undefined;
+  if (!proposalActionType) {
+    console.error(
+      `[HAP MCP] Warning: proposal ${proposal.id} has no action_type in executionContext. ` +
+        `Bounds check may be skipped. Fix the integration manifest for ${proposal.tool}.`,
+    );
+  }
+
   try {
     await state.spClient.postReceipt({
       attestationHash: proposal.frameHash,
       profileId: proposal.profileId,
       path: proposal.path,
-      action: toolName,
+      action: proposal.tool,
+      actionType: proposalActionType,
       executionContext: proposal.executionContext,
       amount: typeof proposal.executionContext.amount === 'number'
         ? proposal.executionContext.amount

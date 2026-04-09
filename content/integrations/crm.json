@@ -25,35 +25,35 @@
     "overrides": {
       "create_contact": {
         "executionMapping": { "type": "contact_type" },
-        "staticExecution": {}
+        "staticExecution": { "action_type": "write" }
       },
       "update_contact": {
         "executionMapping": {},
-        "staticExecution": { "contact_type": "customer" }
+        "staticExecution": { "contact_type": "customer", "action_type": "write" }
       },
       "delete_contact": {
         "executionMapping": {},
-        "staticExecution": { "contact_type": "customer" }
+        "staticExecution": { "contact_type": "customer", "action_type": "delete" }
       },
       "log_activity": {
         "executionMapping": {},
-        "staticExecution": { "contact_type": "customer" }
+        "staticExecution": { "contact_type": "customer", "action_type": "write" }
       },
       "create_deal": {
         "executionMapping": {},
-        "staticExecution": { "contact_type": "customer" }
+        "staticExecution": { "contact_type": "customer", "action_type": "write" }
       },
       "update_deal": {
         "executionMapping": {},
-        "staticExecution": { "contact_type": "customer" }
+        "staticExecution": { "contact_type": "customer", "action_type": "write" }
       },
       "create_task": {
         "executionMapping": {},
-        "staticExecution": { "contact_type": "customer" }
+        "staticExecution": { "contact_type": "customer", "action_type": "write" }
       },
       "complete_task": {
         "executionMapping": {},
-        "staticExecution": { "contact_type": "customer" }
+        "staticExecution": { "contact_type": "customer", "action_type": "write" }
       },
       "find_contacts": { "category": "read" },
       "get_timeline": { "category": "read" },

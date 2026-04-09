@@ -27,10 +27,10 @@
       "get_record": { "category": "read", "boundField": "read_access", "requiredValue": "unlimited" },
       "search_records": { "category": "read", "boundField": "read_access", "requiredValue": "unlimited" },
       "export_records": { "category": "disabled" },
-      "create_record": { "executionMapping": {}, "staticExecution": {} },
-      "archive_record": { "boundField": "archive_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": {} },
+      "create_record": { "executionMapping": {}, "staticExecution": { "action_type": "write" } },
+      "archive_record": { "boundField": "archive_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": { "action_type": "archive" } },
       "update_record": { "category": "disabled" },
-      "delete_record": { "boundField": "delete_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": {} }
+      "delete_record": { "boundField": "delete_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": { "action_type": "delete" } }
     }
   },
   "setupHint": "No configuration needed — works out of the box.",

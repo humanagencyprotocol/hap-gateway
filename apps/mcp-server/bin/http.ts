@@ -24,7 +24,7 @@ import type { GateContent } from '../src/lib/gate-store';
 import { IntegrationRegistry, type IntegrationConfig } from '../src/lib/integration-registry';
 import { IntegrationManager } from '../src/lib/integration-manager';
 import { loadProfiles } from '../src/lib/profile-loader';
-import { loadManifests, getAllManifests } from '../src/lib/manifest-loader';
+import { loadManifests, getAllManifests, getManifest } from '../src/lib/manifest-loader';
 
 const spUrl = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
 const port = parseInt(process.env.HAP_MCP_PORT ?? '3430', 10);
@@ -437,6 +437,13 @@ app.get('/internal/manifests', internalOnly, (_req: Request, res: Response) => {
 /**
  * Start integrations that are enabled and have their credentials available.
  * Called at startup and after new credentials are received.
+ *
+ * `integrations.json` is a point-in-time snapshot captured when each
+ * integration was first added — its `toolGating` is stale if the manifest
+ * file has been updated since. Here we always override the persisted
+ * `toolGating` with the current manifest from `content/integrations/*.json`
+ * so edits to manifest files take effect on next restart without requiring
+ * the user to re-add the integration.
  */
 async function startPendingIntegrations() {
   const configs = integrationRegistry.getEnabled();
@@ -446,8 +453,14 @@ async function startPendingIntegrations() {
     const needsCreds = Object.keys(config.envKeys ?? {}).length > 0;
     if (needsCreds && !integrationManager.canResolveEnvKeys(config)) continue;
 
+    // Override stale persisted toolGating with the current manifest.
+    const manifest = getManifest(config.id);
+    const effectiveConfig = manifest
+      ? { ...config, toolGating: manifest.toolGating }
+      : config;
+
     try {
-      await integrationManager.startIntegration(config);
+      await integrationManager.startIntegration(effectiveConfig);
     } catch (err) {
       console.error(`[HAP MCP] Failed to start integration ${config.id}:`, err);
     }
@@ -563,12 +576,30 @@ app.listen(port, '0.0.0.0', () => {
           // Request the receipt FIRST — this atomically consumes the
           // proposal. If another path already executed it, the SP returns
           // PROPOSAL_ALREADY_EXECUTED and we skip this proposal.
+          //
+          // `action` MUST be the value stored in proposal.tool (the full
+          // namespaced name) so the SP's PROPOSAL_MISMATCH equality check
+          // passes. `actionType` is read from the executionContext that
+          // the tool-proxy captured at proposal creation time, which in
+          // turn came from the manifest's staticExecution.
+          const proposalActionType =
+            typeof proposal.executionContext.action_type === 'string'
+              ? proposal.executionContext.action_type
+              : undefined;
+          if (!proposalActionType) {
+            console.error(
+              `[HAP MCP] Warning: proposal ${proposal.id} has no action_type in executionContext. ` +
+                `Bounds check may be skipped. Fix the integration manifest for ${proposal.tool}.`,
+            );
+          }
+
           try {
             await state.spClient.postReceipt({
               attestationHash: proposal.frameHash,
               profileId: proposal.profileId,
               path: proposal.path,
-              action: toolName,
+              action: proposal.tool,
+              actionType: proposalActionType,
               executionContext: proposal.executionContext,
               amount: typeof proposal.executionContext.amount === 'number'
                 ? proposal.executionContext.amount

@@ -46,7 +46,7 @@
             { "field": "allowed_domains", "transform": "join_domains" }
           ]
         },
-        "staticExecution": {}
+        "staticExecution": { "action_type": "send" }
       },
       "create_draft": {
         "executionMapping": {
@@ -56,11 +56,11 @@
             { "field": "allowed_domains", "transform": "join_domains" }
           ]
         },
-        "staticExecution": {}
+        "staticExecution": { "action_type": "send" }
       },
       "send_draft": {
         "executionMapping": {},
-        "staticExecution": { "recipient_count": 1 }
+        "staticExecution": { "recipient_count": 1, "action_type": "send" }
       },
       "list_messages": { "category": "read" },
       "get_message": { "category": "read" },

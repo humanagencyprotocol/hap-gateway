@@ -192,23 +192,35 @@ export function createGatedToolHandler(
           }
         }
 
-        // Request receipt from SP (pre-flight — fail closed)
+        // Request receipt from SP (pre-flight — fail closed).
+        //
+        // `action` is the tool identifier used by the SP for the
+        // PROPOSAL_MISMATCH equality check in review mode. In automatic
+        // mode there's no proposal to match; we use the namespaced tool
+        // name for consistency with the review-mode path.
+        //
+        // `actionType` tells the SP which bounds field to enforce
+        // (e.g. write_daily_max vs delete_daily_max vs post_daily_max).
+        // It MUST come from the integration manifest's staticExecution —
+        // no prefix-based fallbacks. If a manifest declares a write tool
+        // without action_type, we log a warning and send undefined; the
+        // SP's generic action.split('_')[0] fallback is a last-resort
+        // guard but is never expected to fire in practice.
         try {
-          // Derive actionType from tool name prefix for cumulative tracking.
-          // e.g., create_contact → 'write', delete_contact → 'delete', send_message → 'send'
-          const actionType = String(
-            execution.action_type ??
-            (tool.originalName.startsWith('delete') ? 'delete' :
-             tool.originalName.startsWith('send') ? 'send' :
-             tool.originalName.startsWith('archive') ? 'archive' :
-             'write')
-          );
+          const actionType =
+            typeof execution.action_type === 'string' ? execution.action_type : undefined;
+          if (!actionType) {
+            console.error(
+              `[HAP MCP] Warning: tool ${tool.namespacedName} has no action_type in staticExecution. ` +
+                `Bounds check may be skipped. Fix the integration manifest.`,
+            );
+          }
 
           await state.spClient.postReceipt({
             attestationHash: auth.boundsHash ?? auth.frameHash,
             profileId: auth.profileId,
             path: auth.path,
-            action: String(execution.action_type ?? tool.originalName),
+            action: tool.namespacedName,
             actionType,
             executionContext: { ...execution },
             amount: typeof execution.amount === 'number' ? execution.amount : undefined,
