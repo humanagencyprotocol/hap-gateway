@@ -61,14 +61,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = await spClient.login(apiKey);
       setUser(u);
 
+      // v0.4: every user has a personal group auto-provisioned at registration.
+      // In personal mode the gateway uses that group as the parent for every
+      // attestation; in team mode it picks the (first) team group instead.
+      // Either way, group is non-null and group_id is always sent on attest.
+      const allGroups = await spClient.getGroups();
+
       if (mode === 'personal') {
-        // Personal: no group, domain is 'owner'
-        setGroup(null);
+        const personal = allGroups.find(g => g.isPersonal) ?? null;
+        setGroup(personal);
         setDomain('owner');
       } else {
-        // Team: fetch groups, use the first (and only) group
-        const allGroups = await spClient.getGroups();
-        const teamGroup = allGroups.find(g => !g.isAdmin) ?? allGroups[0] ?? null;
+        const teamGroup =
+          allGroups.find(g => !g.isPersonal && !g.isAdmin) ??
+          allGroups.find(g => !g.isPersonal) ??
+          null;
         setGroup(teamGroup);
         if (teamGroup && teamGroup.myDomains.length > 0) {
           setDomain(teamGroup.myDomains[0]);

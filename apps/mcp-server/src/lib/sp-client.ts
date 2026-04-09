@@ -131,8 +131,23 @@ export class SPClient {
   }
 
   /**
-   * Request a signed receipt from the SP (pre-flight check before tool execution).
-   * The SP enforces group-level limits and returns a signed receipt on success.
+   * Request a signed receipt from the SP.
+   *
+   * v0.4:
+   * - For automatic-mode attestations, this is the pre-flight check before
+   *   tool execution — the SP enforces bounds/limits and returns a signed
+   *   receipt on success.
+   * - For review-mode attestations, the gateway first submits a proposal,
+   *   waits for domain owners to commit, then calls postReceipt with the
+   *   `proposalId` (and the original `toolArgs`). The SP verifies the
+   *   proposal match, atomically transitions it to `executed`, and signs a
+   *   receipt bound to the proposal.
+   *
+   * Response envelope (v0.4):
+   *   { approved: true, receipt: {...} }                     — on success
+   *   { approved: false, errors: [{code, message, ...}] }    — on rejection
+   *
+   * Errors throw SPReceiptError with the structured `errors` array in `body`.
    */
   async postReceipt(data: {
     attestationHash: string;
@@ -142,17 +157,27 @@ export class SPClient {
     actionType?: string;
     executionContext: Record<string, unknown>;
     amount?: number;
+    proposalId?: string;
+    toolArgs?: Record<string, unknown>;
   }): Promise<{ receipt: Record<string, unknown> }> {
     const res = await this.fetch('/api/sp/receipt', {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-      const error = (body.error as string) ?? `SP receipt request failed: ${res.status}`;
-      throw new SPReceiptError(error, res.status, body);
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+
+    if (!res.ok || body.approved === false) {
+      // Extract first structured error for the message; keep full body on the error.
+      const errors = body.errors as Array<Record<string, unknown>> | undefined;
+      const first = errors?.[0];
+      const message =
+        (first?.message as string) ??
+        (first?.code as string) ??
+        (body.error as string) ??
+        `SP receipt request failed: ${res.status}`;
+      throw new SPReceiptError(message, res.status, body);
     }
-    return res.json() as Promise<{ receipt: Record<string, unknown> }>;
+    return { receipt: body.receipt as Record<string, unknown> };
   }
 
   /**
@@ -196,17 +221,8 @@ export class SPClient {
     return data.proposals;
   }
 
-  /**
-   * Update a proposal's status (e.g., after execution).
-   */
-  async updateProposalStatus(id: string, status: string, result?: unknown): Promise<void> {
-    const res = await this.fetch(`/api/proposals/${encodeURIComponent(id)}/resolve`, {
-      method: 'POST',
-      body: JSON.stringify({ action: status, execution_result: result }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-      throw new Error((body.error as string) ?? `SP proposal update failed: ${res.status}`);
-    }
-  }
+  // NOTE: v0.3 used POST /api/proposals/{id}/resolve with action: 'executed'
+  // to mark a proposal as executed after the gateway ran the tool. In v0.4
+  // the committed→executed transition is atomic with receipt issuance, so
+  // this helper was removed. Use postReceipt({ proposalId }) instead.
 }

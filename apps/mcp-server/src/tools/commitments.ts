@@ -2,16 +2,29 @@
  * check-pending-commitments tool — lets agents check on deferred commitment proposals.
  *
  * With proposal_id: returns status of a specific proposal. If the proposal is
- *   committed (fully approved), the original tool call is executed immediately
- *   and the proposal is marked as executed.
+ *   committed (fully approved), the gateway requests a signed receipt from the
+ *   SP (which atomically transitions the proposal committed→executed) and then
+ *   executes the original tool call.
  * Without: returns all pending proposals across all domains.
+ *
+ * v0.4 flow:
+ *   committed proposal → postReceipt(proposalId, toolArgs, executionContext)
+ *   → SP verifies the match, atomically marks executed, issues receipt
+ *   → gateway executes the tool
+ *
+ * The legacy updateProposalStatus('executed') call is gone — the state
+ * transition is atomic with receipt issuance, not a separate step.
  */
 
 import type { SharedState } from '../lib/shared-state';
 import type { IntegrationManager } from '../lib/integration-manager';
-import type { SPProposal } from '../lib/sp-client';
+import { SPReceiptError, type SPProposal } from '../lib/sp-client';
 
-/** Execute a committed proposal's stored tool call and mark it executed. */
+/**
+ * Ask the SP for a signed receipt bound to the committed proposal, then
+ * execute the stored tool call. The SP does the atomic committed→executed
+ * transition; the gateway runs the tool only if the receipt was issued.
+ */
 async function executeCommitted(
   proposal: SPProposal,
   state: SharedState,
@@ -29,17 +42,54 @@ async function executeCommitted(
   const integrationId = proposal.tool.slice(0, sep);
   const toolName = proposal.tool.slice(sep + 2);
 
+  // Request a signed receipt FIRST — this atomically transitions the
+  // proposal to executed. If another path (e.g. the background loop) has
+  // already consumed it, the SP returns PROPOSAL_ALREADY_EXECUTED.
+  try {
+    await state.spClient.postReceipt({
+      attestationHash: proposal.frameHash,
+      profileId: proposal.profileId,
+      path: proposal.path,
+      action: toolName,
+      executionContext: proposal.executionContext,
+      amount: typeof proposal.executionContext.amount === 'number'
+        ? proposal.executionContext.amount
+        : undefined,
+      proposalId: proposal.id,
+      toolArgs: proposal.toolArgs,
+    });
+  } catch (err) {
+    if (err instanceof SPReceiptError) {
+      const code = (err.body.errors as Array<{ code?: string }> | undefined)?.[0]?.code;
+      if (code === 'PROPOSAL_ALREADY_EXECUTED') {
+        return {
+          text: `Proposal ${proposal.id} has already been executed by another request.`,
+        };
+      }
+      return {
+        text: `Proposal ${proposal.id}: SP rejected receipt — ${err.message}`,
+        isError: true,
+      };
+    }
+    return {
+      text: `Proposal ${proposal.id}: receipt request failed — ${err instanceof Error ? err.message : String(err)}`,
+      isError: true,
+    };
+  }
+
+  // Receipt issued — now execute the tool.
   try {
     const result = await integrationManager.callTool(integrationId, toolName, proposal.toolArgs);
     const resultText = (result.content as Array<{ text: string }>)?.[0]?.text ?? JSON.stringify(result);
-
-    // Mark the proposal as executed on the SP
-    await state.spClient.updateProposalStatus(proposal.id, 'executed', result);
-
     return { text: `Proposal ${proposal.id} committed and executed.\nResult: ${resultText}` };
   } catch (err) {
+    // Receipt is already signed at the SP — the user got credit for this
+    // commitment. The tool itself failed, which is a local error.
     const msg = err instanceof Error ? err.message : String(err);
-    return { text: `Proposal ${proposal.id} committed but execution failed: ${msg}`, isError: true };
+    return {
+      text: `Proposal ${proposal.id} receipt issued but tool execution failed: ${msg}`,
+      isError: true,
+    };
   }
 }
 

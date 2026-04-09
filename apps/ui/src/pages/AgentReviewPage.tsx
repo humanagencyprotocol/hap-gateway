@@ -16,9 +16,12 @@ interface GateData {
 
 interface AuthData {
   profileId: string;
-  groupId?: string;
+  // v0.4: every attestation requires a group_id. AgentNewPage always sets
+  // this to the user's active group (personal or team).
+  groupId: string;
   groupName?: string;
   domain: string;
+  isTeam?: boolean;
 }
 
 export function AgentReviewPage() {
@@ -88,10 +91,15 @@ export function AgentReviewPage() {
 
   const handleCommit = async () => {
     if (!authData || !gateData || !profile || !user) return;
+    if (!authData.groupId) {
+      setError('No active group; cannot create authorization.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
-      // Personal mode (no group): use "owner" as domain. Group mode: use assigned domain.
+      // Personal mode uses "owner" as the default domain; team mode uses the
+      // domain assigned to the user in their group.
       const domain = authData.domain || authDomain;
 
       const boundsHash = await computeBoundsHashBrowser(gateData.bounds, profile);
@@ -106,7 +114,10 @@ export function AgentReviewPage() {
         })),
       ]);
 
-      // Attest (creates the attestation on SP)
+      // Attest (creates the attestation on SP).
+      // v0.4: commitment_mode is part of the signed payload. 'review' means
+      // each action requires per-action human approval via a proposal;
+      // 'automatic' lets the agent act within bounds without per-action review.
       const result = await spClient.attest({
         profile_id: authData.profileId,
         bounds: gateData.bounds,
@@ -118,7 +129,7 @@ export function AgentReviewPage() {
         execution_context_hash: ecHash,
         group_id: authData.groupId,
         ttl: ttlSeconds,
-        defer_commitment: commitMode === 'per-action',
+        commitment_mode: commitMode === 'per-action' ? 'review' : 'automatic',
         title: authTitle.trim(),
       });
 

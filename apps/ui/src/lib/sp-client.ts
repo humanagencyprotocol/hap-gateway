@@ -18,6 +18,8 @@ export interface SPGroup {
   name: string;
   myDomains: string[];
   isAdmin: boolean;
+  /** v0.4: true for the auto-provisioned single-member personal workspace. */
+  isPersonal?: boolean;
 }
 
 export interface AttestResponse {
@@ -227,9 +229,9 @@ class SPClient {
 
   async attest(body: {
     profile_id: string;
-    path: string;
     // v0.3
     frame?: Record<string, string | number>;
+    path?: string;
     // v0.4
     bounds?: Record<string, string | number>;
     bounds_hash?: string;
@@ -239,9 +241,9 @@ class SPClient {
     did: string;
     gate_content_hashes: Record<string, string>;
     execution_context_hash: string;
-    group_id?: string;
+    group_id: string;
     ttl?: number;
-    defer_commitment?: boolean;
+    commitment_mode: 'automatic' | 'review';
     title?: string;
   }): Promise<AttestResponse> {
     const res = await this.fetch('/api/sp/attest', {

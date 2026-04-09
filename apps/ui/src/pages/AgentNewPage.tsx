@@ -49,12 +49,22 @@ export function AgentNewPage() {
   };
 
   const handleCreate = (profileId: string) => {
+    // v0.4: every attestation requires a group_id. In personal mode this is
+    // the user's auto-provisioned personal group; in team mode it's the
+    // currently active team group. The flag below is only used for UI
+    // labeling — the SP runs the same checks for both.
+    if (!groupId) {
+      // Should not happen — AuthContext sets the personal group on login.
+      console.error('No active group when creating authorization');
+      return;
+    }
     const isTeam = isTeamManaged(profileId);
     sessionStorage.setItem('agentAuth', JSON.stringify({
       profileId,
-      groupId: isTeam ? groupId : null,
-      groupName: isTeam ? group?.name : null,
+      groupId,
+      groupName: group?.name ?? null,
       domain,
+      isTeam,
     }));
     navigate('/agent/gate');
   };

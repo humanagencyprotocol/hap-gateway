@@ -524,7 +524,13 @@ app.listen(port, '0.0.0.0', () => {
 
   // ─── Auto-execution loop for committed proposals ────────────────────────
   // Polls SP every 5 seconds for proposals that all domains have committed.
-  // When found, executes the stored tool call and updates the proposal.
+  // For each one: requests a signed receipt (which atomically transitions
+  // the proposal to executed on the SP), then executes the tool locally.
+  //
+  // v0.4: the receipt route is the single source of truth for the
+  // committed→executed state transition. The legacy updateProposalStatus
+  // call is gone. If check-pending-commitments races with this loop, the
+  // atomic CAS in the SP ensures only one path executes.
 
   const PROPOSAL_POLL_INTERVAL = 5_000;
 
@@ -533,18 +539,30 @@ app.listen(port, '0.0.0.0', () => {
       const committed = await state.spClient.getCommittedProposals();
       for (const proposal of committed) {
         try {
-          // Parse tool name: "integration___toolName" → { integrationId, toolName }
-          const parts = proposal.tool.split('___');
-          if (parts.length !== 2) {
-            console.error(`[HAP MCP] Invalid tool name in proposal ${proposal.id}: ${proposal.tool}`);
-            continue;
+          // Parse namespaced tool name. Both "__" and "___" separators have
+          // been used historically; check both.
+          let integrationId: string;
+          let toolName: string;
+          if (proposal.tool.includes('___')) {
+            const parts = proposal.tool.split('___');
+            if (parts.length !== 2) {
+              console.error(`[HAP MCP] Invalid tool name in proposal ${proposal.id}: ${proposal.tool}`);
+              continue;
+            }
+            [integrationId, toolName] = parts;
+          } else {
+            const sep = proposal.tool.indexOf('__');
+            if (sep < 0) {
+              console.error(`[HAP MCP] Invalid tool name in proposal ${proposal.id}: ${proposal.tool}`);
+              continue;
+            }
+            integrationId = proposal.tool.slice(0, sep);
+            toolName = proposal.tool.slice(sep + 2);
           }
-          const [integrationId, toolName] = parts;
 
-          // Execute the tool
-          const result = await integrationManager.callTool(integrationId, toolName, proposal.toolArgs);
-
-          // Post receipt to SP
+          // Request the receipt FIRST — this atomically consumes the
+          // proposal. If another path already executed it, the SP returns
+          // PROPOSAL_ALREADY_EXECUTED and we skip this proposal.
           try {
             await state.spClient.postReceipt({
               attestationHash: proposal.frameHash,
@@ -552,25 +570,34 @@ app.listen(port, '0.0.0.0', () => {
               path: proposal.path,
               action: toolName,
               executionContext: proposal.executionContext,
+              amount: typeof proposal.executionContext.amount === 'number'
+                ? proposal.executionContext.amount
+                : undefined,
+              proposalId: proposal.id,
+              toolArgs: proposal.toolArgs,
             });
           } catch (err) {
-            console.error(`[HAP MCP] Receipt failed for proposal ${proposal.id}:`, err);
+            // Includes PROPOSAL_ALREADY_EXECUTED races with check-pending-commitments
+            console.error(`[HAP MCP] Receipt failed for proposal ${proposal.id}:`, err instanceof Error ? err.message : err);
+            continue;
           }
 
-          // Record in execution log
+          // Receipt issued — now execute the tool. If this fails the receipt
+          // is already on the SP (the user got credit for the commitment).
+          try {
+            await integrationManager.callTool(integrationId, toolName, proposal.toolArgs);
+          } catch (err) {
+            console.error(`[HAP MCP] Tool execution failed for proposal ${proposal.id} after receipt issued:`, err);
+            continue;
+          }
+
+          // Record in local execution log
           state.executionLog.record({
             profileId: proposal.profileId,
             path: proposal.path,
             execution: proposal.executionContext,
             timestamp: Math.floor(Date.now() / 1000),
           });
-
-          // Update proposal status to executed
-          try {
-            await state.spClient.updateProposalStatus(proposal.id, 'executed', result);
-          } catch {
-            // Best-effort status update
-          }
 
           console.error(`[HAP MCP] Auto-executed proposal ${proposal.id}: ${proposal.tool}`);
         } catch (err) {

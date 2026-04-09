@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function ExtendAuthModal({ item, onClose, onSuccess }: Props) {
-  const { user, activeDomain } = useAuth();
+  const { user, activeDomain, groupId } = useAuth();
   const [selectedTTL, setSelectedTTL] = useState(1800);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +61,17 @@ export function ExtendAuthModal({ item, onClose, onSuccess }: Props) {
         })),
       ]);
 
-      // 4. Re-attest with new TTL
+      // 4. Re-attest with new TTL.
+      // v0.4: every attestation requires group_id and commitment_mode in
+      // the signed payload. Preserve the original commitment mode by
+      // checking deferred_commitment_domains — the original was 'review'
+      // iff that array is non-empty.
+      if (!groupId) {
+        throw new Error('No active group; cannot extend authorization.');
+      }
+      const originalMode: 'automatic' | 'review' =
+        (item.deferred_commitment_domains?.length ?? 0) > 0 ? 'review' : 'automatic';
+
       const result = await spClient.attest({
         profile_id: item.profile_id,
         path: item.path,
@@ -72,6 +82,8 @@ export function ExtendAuthModal({ item, onClose, onSuccess }: Props) {
         did: user.did,
         gate_content_hashes: { intent: intentHash },
         execution_context_hash: ecHash,
+        group_id: groupId,
+        commitment_mode: originalMode,
         ttl: selectedTTL,
       });
 
