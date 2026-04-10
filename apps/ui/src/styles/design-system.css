@@ -1,5 +1,34 @@
-/* HAP Platform UI — Design System
- * Extracted from unified-platform-mockup-v2.html */
+/* HAP Platform UI — Design System */
+
+/* ── Inter font (self-hosted) ── */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Inter-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/Inter-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Inter-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/Inter-Bold.woff2') format('woff2');
+}
 
 /* ── Reset ── */
 *, *::before, *::after {
@@ -12,21 +41,34 @@
    DESIGN TOKENS
    ══════════════════════════════════════════════ */
 :root {
-  --text-primary: #1E1E1E;
-  --text-secondary: #525252;
-  --text-tertiary: #737373;
+  --text-primary: #111111;
+  /* secondary/tertiary collapsed to primary — no grey fonts */
+  --text-secondary: #111111;
+  --text-tertiary: #111111;
+  /* grey tone reserved for non-text chrome only */
+  --text-muted: #888888;
   --bg-main: #fafafa;
   --bg-elevated: #ffffff;
   --bg-input: #ffffff;
-  --accent: #DFA346;
-  --accent-subtle: #FFF8E7;
-  --accent-hover: #C88A2E;
+  --accent: #888888;
+  --accent-subtle: #f0f0f0;
+  --accent-hover: #555555;
   --border: #e5e5e5;
   --danger: #dc2626;
   --danger-subtle: #fef2f2;
   --success: #16a34a;
   --success-subtle: #f0fdf4;
   --warning: #d97706;
+  /* Primary button = inverse of page background */
+  --btn-primary-bg: #111111;
+  --btn-primary-fg: #ffffff;
+  --btn-primary-bg-hover: #000000;
+  --btn-primary-bg-active: #2a2a2a;
+  /* Emoji icon filter — forces emoji to match the icon-fg color */
+  --icon-filter: brightness(0) invert(1);
+  /* Shadow tint for primary button hover glow */
+  --primary-glow: rgba(0, 0, 0, 0.2);
+  --primary-focus-ring: rgba(0, 0, 0, 0.15);
   --nav-height: 3.5rem;
   --sidebar-width: 15rem;
   --content-width: 75rem;
@@ -34,18 +76,26 @@
 }
 
 :root[data-theme="dark"] {
-  --text-primary: #e5e5e5;
-  --text-secondary: #a3a3a3;
-  --text-tertiary: #737373;
+  --text-primary: #ffffff;
+  --text-secondary: #ffffff;
+  --text-tertiary: #ffffff;
+  --text-muted: #888888;
   --bg-main: #0a0a0a;
   --bg-elevated: #1a1a1a;
   --bg-input: #141414;
-  --accent: #DFA346;
-  --accent-subtle: #2a2318;
-  --accent-hover: #C88A2E;
+  --accent: #888888;
+  --accent-subtle: #1f1f1f;
+  --accent-hover: #bbbbbb;
   --border: #2a2a2a;
   --danger-subtle: #2a0a0a;
   --success-subtle: #0a2a0a;
+  --btn-primary-bg: #ffffff;
+  --btn-primary-fg: #000000;
+  --btn-primary-bg-hover: #e5e5e5;
+  --btn-primary-bg-active: #c4c4c4;
+  --icon-filter: brightness(0);
+  --primary-glow: rgba(255, 255, 255, 0.25);
+  --primary-focus-ring: rgba(255, 255, 255, 0.2);
 }
 
 /* ══════════════════════════════════════════════
@@ -54,12 +104,22 @@
 html { scroll-behavior: smooth; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
   font-size: 16px;
   line-height: 1.6;
   color: var(--text-primary);
   background: var(--bg-main);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Slightly larger root size on big desktops — everything rem-based scales with it */
+@media (min-width: 1900px) {
+  body { font-size: 17.5px; }
+}
+@media (min-width: 2800px) {
+  body { font-size: 19px; }
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -130,8 +190,8 @@ code {
   font-size: 0.65rem;
   font-weight: 600;
   padding: 0.15rem 0.4rem;
-  background: var(--accent);
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   border-radius: 0.25rem;
 }
 
@@ -396,15 +456,22 @@ code {
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-primary {
-  background: var(--accent);
-  color: white;
-  border: 2px solid var(--accent);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border: 2px solid var(--btn-primary-bg);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-fg);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(223, 163, 70, 0.25);
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--btn-primary-bg-active);
+  border-color: var(--btn-primary-bg-active);
 }
 
 .btn-secondary {
@@ -414,8 +481,9 @@ code {
 }
 
 .btn-secondary:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--btn-primary-bg);
+  color: var(--text-primary);
+  background: var(--accent-subtle);
 }
 
 .btn-ghost {
@@ -474,7 +542,7 @@ code {
 .form-input:focus,
 .form-textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(223, 163, 70, 0.15);
+  box-shadow: 0 0 0 3px var(--primary-focus-ring);
 }
 
 .form-textarea {
@@ -664,7 +732,7 @@ code {
 .step-circle.current {
   border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(223, 163, 70, 0.15);
+  box-shadow: 0 0 0 3px var(--primary-focus-ring);
 }
 
 .step-line {
@@ -2075,7 +2143,7 @@ code {
 }
 
 .stepper-input:focus {
-  box-shadow: inset 0 0 0 2px rgba(223, 163, 70, 0.25);
+  box-shadow: inset 0 0 0 2px var(--primary-focus-ring);
 }
 
 /* ══════════════════════════════════════════════
@@ -2097,7 +2165,7 @@ code {
 
 .tag-input:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(223, 163, 70, 0.15);
+  box-shadow: 0 0 0 3px var(--primary-focus-ring);
 }
 
 .tag-input-invalid {
