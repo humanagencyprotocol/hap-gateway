@@ -6,8 +6,8 @@
   "icon": "mail",
   "profile": "email",
   "mcp": {
-    "command": "npx",
-    "args": ["-y", "@shinzolabs/gmail-mcp@latest"],
+    "command": "gmail-mcp",
+    "args": [],
     "env": { "PORT": "0" }
   },
   "credentials": {

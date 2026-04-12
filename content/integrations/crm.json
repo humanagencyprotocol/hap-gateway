@@ -6,8 +6,8 @@
   "icon": "users",
   "profile": "customers",
   "mcp": {
-    "command": "npx",
-    "args": ["-y", "@humanagencyp/crm-mcp@latest"]
+    "command": "crm-mcp",
+    "args": []
   },
   "credentials": {
     "fields": [

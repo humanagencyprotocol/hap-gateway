@@ -7,8 +7,8 @@
   "profile": "records",
   "personalDefault": true,
   "mcp": {
-    "command": "npx",
-    "args": ["-y", "@humanagencyp/records-mcp@latest"]
+    "command": "records-mcp",
+    "args": []
   },
   "credentials": {
     "fields": [

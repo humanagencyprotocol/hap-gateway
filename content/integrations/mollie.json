@@ -7,7 +7,7 @@
   "profile": "charge",
   "mcp": {
     "command": "sh",
-    "args": ["-c", "npx -y mcp-remote https://mcp.mollie.com/mcp --header \"Authorization: Bearer $MOLLIE_ACCESS_TOKEN\""]
+    "args": ["-c", "mcp-remote https://mcp.mollie.com/mcp --header \"Authorization: Bearer $MOLLIE_ACCESS_TOKEN\""]
   },
   "credentials": {
     "fields": [

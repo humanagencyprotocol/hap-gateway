@@ -28,6 +28,9 @@ COPY --from=build /build/apps/ apps/
 # Copy integration manifests
 COPY content/integrations/ content/integrations/
 
+# Pre-install MCP servers and remote bridge so integrations don't need runtime npm access
+RUN npm install -g mcp-remote @humanagencyp/linkedin-mcp @humanagencyp/crm-mcp @humanagencyp/records-mcp @shinzolabs/gmail-mcp
+
 # Fetch profiles from GitHub (public repo)
 RUN git clone --depth 1 https://github.com/humanagencyprotocol/hap-profiles.git /hap-profiles \
     && rm -rf /hap-profiles/.git

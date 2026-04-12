@@ -6,8 +6,8 @@
   "icon": "share",
   "profile": "publish",
   "mcp": {
-    "command": "npx",
-    "args": ["-y", "@humanagencyp/linkedin-mcp@latest"]
+    "command": "linkedin-mcp",
+    "args": []
   },
   "credentials": {
     "fields": [
