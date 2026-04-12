@@ -75,7 +75,7 @@ Stored on disk at `~/.hap/` (or `$HAP_DATA_DIR`), encrypted with vault key when 
 - Gate content plaintext (problem, objective, tradeoffs)
 - Context content (currency, action_type, target_env, etc.)
 - Execution log (tool call history for cumulative tracking)
-- Service credentials (Stripe API key, etc.)
+- Service credentials (Mollie access token, etc.)
 
 The vault key is derived from the human's SP API key via PBKDF2 (100,000 iterations, SHA-256). It exists in memory only while the session is active.
 

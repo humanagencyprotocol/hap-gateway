@@ -1,0 +1,111 @@
+{
+  "id": "mollie",
+  "name": "Mollie",
+  "version": "1.0.0",
+  "description": "Payments, subscriptions, and billing",
+  "icon": "card",
+  "profile": "charge",
+  "mcp": {
+    "command": "sh",
+    "args": ["-c", "npx -y mcp-remote https://mcp.mollie.com/mcp --header \"Authorization: Bearer $MOLLIE_ACCESS_TOKEN\""]
+  },
+  "credentials": {
+    "fields": [
+      { "key": "accessToken", "label": "Access Token", "type": "password", "placeholder": "access_org_..." }
+    ],
+    "envMapping": { "MOLLIE_ACCESS_TOKEN": "accessToken" }
+  },
+  "oauth": null,
+  "toolGating": {
+    "default": {
+      "executionMapping": {},
+      "staticExecution": { "action_type": "read" }
+    },
+    "overrides": {
+      "CreatePayment": {
+        "executionMapping": {
+          "amount": "amount",
+          "currency": "currency"
+        },
+        "staticExecution": { "action_type": "charge" }
+      },
+      "CreatePaymentForCustomer": {
+        "executionMapping": {
+          "amount": "amount",
+          "currency": "currency"
+        },
+        "staticExecution": { "action_type": "charge" }
+      },
+      "CreatePaymentLink": {
+        "executionMapping": {
+          "amount": "amount",
+          "currency": "currency"
+        },
+        "staticExecution": { "action_type": "charge" }
+      },
+      "CreateCapture": {
+        "executionMapping": {
+          "amount_value": "amount",
+          "amount_currency": "currency"
+        },
+        "staticExecution": { "action_type": "charge" }
+      },
+      "CreateSubscription": {
+        "executionMapping": {
+          "amount_value": "amount",
+          "amount_currency": "currency"
+        },
+        "staticExecution": { "action_type": "subscribe" }
+      },
+      "UpdateSubscription": {
+        "executionMapping": {},
+        "staticExecution": { "action_type": "subscribe" }
+      },
+      "CancelSubscription": {
+        "executionMapping": {},
+        "staticExecution": { "action_type": "subscribe" }
+      },
+      "CreateCustomer": {
+        "executionMapping": {},
+        "staticExecution": { "action_type": "charge" }
+      },
+      "UpdateCustomer": {
+        "executionMapping": {},
+        "staticExecution": { "action_type": "charge" }
+      },
+      "CreateMandate": {
+        "executionMapping": {},
+        "staticExecution": { "action_type": "charge" }
+      },
+      "RevokeMandate": {
+        "executionMapping": {},
+        "staticExecution": { "action_type": "charge" }
+      },
+      "CreateWebhook": {
+        "executionMapping": {},
+        "staticExecution": { "action_type": "charge" }
+      },
+      "UpdateWebhook": {
+        "executionMapping": {},
+        "staticExecution": { "action_type": "charge" }
+      }
+    }
+  },
+  "setupHint": "Use a test token (test_...) for development.",
+  "setupGuide": [
+    {
+      "title": "Create a Mollie account",
+      "description": "Sign up at mollie.com if you don't have an account yet.",
+      "link": "https://my.mollie.com/dashboard/signup"
+    },
+    {
+      "title": "Get your access token",
+      "description": "Go to Settings > Developer > Access tokens in your Mollie dashboard. Create an Organization access token.",
+      "link": "https://my.mollie.com/dashboard/developers/api-keys"
+    },
+    {
+      "title": "Enter your token below",
+      "description": "Paste your Access Token in the field below. Use a test token (test_...) for development."
+    }
+  ]
+}

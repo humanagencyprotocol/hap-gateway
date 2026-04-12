@@ -105,7 +105,7 @@ Run from the [hap-e2e](https://github.com/humanagencyprotocol/hap-e2e) repo:
 
 ```bash
 cd ../hap-e2e
-STRIPE_TEST_KEY=sk_test_xxx pnpm test
+MOLLIE_TEST_KEY=test_xxx pnpm test
 ```
 
 ## Docker
@@ -131,7 +131,7 @@ docker run -p 7400:3000 -p 7430:3030 \
 After restarting services, a single login in the UI restores the full state:
 
 1. Pushes SP session cookie and vault key to the MCP server
-2. Re-pushes all stored service credentials (Stripe API key, etc.)
+2. Re-pushes all stored service credentials (Mollie access token, etc.)
 3. Re-syncs all stored gate content with the SP attestation cache
 
 ## Related Repositories

@@ -22,7 +22,7 @@ Human (Browser)                              AI Agent (MCP client)
       v                                             v
 +----------------+                          +----------------+
 | SP (remote)    |                          | Downstream MCP |
-| Attestation    |<-- receipts -------------|  (e.g. Stripe) |
+| Attestation    |<-- receipts -------------|  (e.g. Mollie) |
 | signing,       |                          |                |
 | receipts,      |                          | - 28 tools     |
 | revocation     |                          | - stdio        |
@@ -46,7 +46,7 @@ The control-plane communicates with the MCP server via loopback-only HTTP endpoi
 | `POST /internal/configure` | CP -> MCP | Push session cookie + vault key |
 | `POST /internal/gate-content` | CP -> MCP | Push gate content + context (encrypted storage) |
 | `POST /internal/resync-gates` | CP -> MCP | Re-sync all stored gates with SP attestations |
-| `POST /internal/service-credentials` | CP -> MCP | Push decrypted service credentials (e.g., Stripe API key) |
+| `POST /internal/service-credentials` | CP -> MCP | Push decrypted service credentials (e.g., Mollie access token) |
 | `POST /internal/add-integration` | CP -> MCP | Start a downstream MCP server |
 | `DELETE /internal/remove-integration/:id` | CP -> MCP | Stop a downstream MCP server |
 | `GET /internal/integrations` | CP -> MCP | List running integrations |
@@ -59,7 +59,7 @@ These endpoints are restricted to `127.0.0.1` / `::1`. In Docker, both services 
 |------|----------|-----------|----------|
 | Gate content (problem, objective, tradeoffs) | `~/.hap/gates.json` or `gates.enc.json` | Yes (with vault key) | Yes |
 | Execution log (tool call history) | `~/.hap/execution-log.json` or `.enc.json` | Yes (with vault key) | Yes |
-| Integration configs (Stripe, etc.) | `~/.hap/integrations.json` | No | Yes |
+| Integration configs (Mollie, etc.) | `~/.hap/integrations.json` | No | Yes |
 | Service credentials (API keys) | `~/.hap/vault.enc.json` | Yes (PBKDF2 from SP API key) | Yes |
 | Attestation cache | In-memory | No | No (re-synced on login) |
 | Context content | In gate store | Yes (with vault key) | Yes |

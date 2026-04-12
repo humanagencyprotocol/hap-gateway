@@ -1,6 +1,6 @@
 {
   "integrations": {
-    "stripe": "stripe.json",
+    "mollie": "mollie.json",
     "gmail": "gmail.json",
     "crm": "crm.json",
     "records": "records.json",

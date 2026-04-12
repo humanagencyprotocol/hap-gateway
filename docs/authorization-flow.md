@@ -193,7 +193,7 @@ A human can revoke an authorization at any time through the SP interface. After 
 After an MCP server restart, a single login through the control-plane UI restores the full state:
 
 1. Control-plane pushes SP session cookie + vault key to MCP server
-2. Control-plane re-pushes all stored service credentials (e.g., Stripe API key)
+2. Control-plane re-pushes all stored service credentials (e.g., Mollie access token)
 3. Control-plane triggers gate re-sync — MCP server re-fetches attestations from SP using stored gate entries
 
 No need to re-create authorizations or re-enter credentials.
