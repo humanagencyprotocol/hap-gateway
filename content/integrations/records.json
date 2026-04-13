@@ -33,6 +33,30 @@
       "delete_record": { "boundField": "delete_access", "requiredValue": "allowed", "executionMapping": {}, "staticExecution": { "action_type": "delete" } }
     }
   },
+  "templates": [
+    {
+      "name": "Search & Read",
+      "description": "List, search, and read records. Cannot create, modify, delete, or export.",
+      "risk": "low",
+      "mode": "automatic",
+      "bounds": { "read_access": "true", "write_daily_max": "0", "delete_access": "false", "archive_access": "false" },
+      "context": {},
+      "intent": "Allow the agent to search and read records. Read-only — no modifications.",
+      "ttl": 2592000,
+      "tags": ["read-only"]
+    },
+    {
+      "name": "Manage with Review",
+      "description": "Create, update, archive, delete, and export records. Every write requires approval.",
+      "risk": "high",
+      "mode": "review",
+      "bounds": { "read_access": "true", "write_daily_max": "50", "delete_access": "true", "archive_access": "true" },
+      "context": {},
+      "intent": "Full records management. Every write, delete, and export action requires my review before execution.",
+      "ttl": 2592000,
+      "tags": ["50 writes/day", "review mode"]
+    }
+  ],
   "setupHint": "No configuration needed — works out of the box.",
   "setupGuide": [
     {

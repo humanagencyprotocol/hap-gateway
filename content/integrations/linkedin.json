@@ -61,6 +61,30 @@
       "get_profile": { "category": "read" }
     }
   },
+  "templates": [
+    {
+      "name": "Read Profile",
+      "description": "View your profile and list existing posts. Cannot publish or delete.",
+      "risk": "low",
+      "mode": "automatic",
+      "bounds": { "post_daily_max": "0", "post_monthly_max": "0" },
+      "context": { "allowed_platforms": "linkedin", "content_type": "text", "audience": "public" },
+      "intent": "Allow the agent to read my LinkedIn profile and list existing posts. No publishing or deleting.",
+      "ttl": 2592000,
+      "tags": ["read-only"]
+    },
+    {
+      "name": "Publish with Review",
+      "description": "Create and delete posts. Every action requires your approval first.",
+      "risk": "high",
+      "mode": "review",
+      "bounds": { "post_daily_max": "5", "post_monthly_max": "30" },
+      "context": { "allowed_platforms": "linkedin", "content_type": "text,image,article", "audience": "public" },
+      "intent": "Allow the agent to create and manage LinkedIn posts. Every publish or delete action requires my review before it goes live.",
+      "ttl": 2592000,
+      "tags": ["5 posts/day", "review mode"]
+    }
+  ],
   "setupHint": "Requires a LinkedIn App with 'Share on LinkedIn' product.",
   "setupGuide": [
     {

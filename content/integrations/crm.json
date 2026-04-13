@@ -62,6 +62,30 @@
       "export_crm": { "category": "read" }
     }
   },
+  "templates": [
+    {
+      "name": "Browse & Log",
+      "description": "Search contacts, view pipeline and timeline, log activities. No creates or deletes.",
+      "risk": "low",
+      "mode": "automatic",
+      "bounds": { "write_daily_max": "50", "delete_daily_max": "0" },
+      "context": { "contact_type": "customer,lead,partner,vendor" },
+      "intent": "Allow the agent to browse CRM data and log activities. Read and log only — no creating, editing, or deleting records.",
+      "ttl": 2592000,
+      "tags": ["read + log", "no deletes"]
+    },
+    {
+      "name": "Full CRM with Review",
+      "description": "Create contacts, deals, and tasks. Update and delete records. Every write requires approval.",
+      "risk": "high",
+      "mode": "review",
+      "bounds": { "write_daily_max": "50", "delete_daily_max": "10" },
+      "context": { "contact_type": "customer,lead,partner,vendor" },
+      "intent": "Full CRM management — create, update, and delete contacts, deals, and tasks. Every write action requires my review before execution.",
+      "ttl": 2592000,
+      "tags": ["50 writes/day", "10 deletes/day", "review mode"]
+    }
+  ],
   "setupHint": "No configuration needed — works out of the box.",
   "setupGuide": [
     {

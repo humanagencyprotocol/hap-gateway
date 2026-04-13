@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { spClient, type IntegrationManifest, type McpIntegrationStatus } from '../lib/sp-client';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { spClient, type IntegrationManifest, type McpIntegrationStatus, type AuthTemplate, type ProfileSummary } from '../lib/sp-client';
 
 const ICON_MAP: Record<string, string> = {
   card: '\u{1F4B3}',
@@ -9,13 +11,16 @@ const ICON_MAP: Record<string, string> = {
 interface Props {
   manifest: IntegrationManifest;
   integration: McpIntegrationStatus | undefined;
+  profiles: ProfileSummary[];
   onStatusChange: () => void;
   onSuccess: (msg: string) => void;
 }
 
 type CardState = 'unconfigured' | 'needs-oauth' | 'ready' | 'running';
 
-export function IntegrationCard({ manifest, integration, onStatusChange, onSuccess }: Props) {
+export function IntegrationCard({ manifest, integration, profiles, onStatusChange, onSuccess }: Props) {
+  const navigate = useNavigate();
+  const { group, groupId, domain } = useAuth();
   const [credValues, setCredValues] = useState<Record<string, string>>({});
   const [credConfigured, setCredConfigured] = useState(false);
   const [oauthConnected, setOauthConnected] = useState(false);
@@ -182,19 +187,85 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
 
       {/* Running state */}
       {cardState === 'running' && integration && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div className="service-status service-status-connected">
-            <span className="service-status-dot" />
-            Running ({integration.toolCount} tools)
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="service-status service-status-connected">
+              <span className="service-status-dot" />
+              Running ({integration.toolCount} tools)
+            </div>
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{ color: 'var(--danger)' }}
+              onClick={remove}
+            >
+              Stop
+            </button>
           </div>
-          <button
-            className="btn btn-sm btn-ghost"
-            style={{ color: 'var(--danger)' }}
-            onClick={remove}
-          >
-            Stop
-          </button>
-        </div>
+
+          {/* Authorization templates */}
+          {manifest.templates && manifest.templates.length > 0 && (
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                Set up what your agent is allowed to do:
+              </p>
+              <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: `repeat(${Math.min(manifest.templates.length, 3)}, 1fr)` }}>
+                {manifest.templates.map((tpl: AuthTemplate) => (
+                  <button
+                    key={tpl.name}
+                    className="template-card"
+                    onClick={() => {
+                      // Resolve full profileId from short manifest.profile
+                      const shortProfile = manifest.profile;
+                      const profile = profiles.find(p => {
+                        const shortId = p.id.replace(/@.*$/, '').split('/').pop() ?? p.id;
+                        return shortId === shortProfile;
+                      });
+                      if (!profile || !groupId) return;
+
+                      sessionStorage.setItem('agentAuth', JSON.stringify({
+                        profileId: profile.id,
+                        groupId,
+                        groupName: group?.name ?? null,
+                        domain,
+                        isTeam: false,
+                      }));
+                      sessionStorage.setItem('agentGate', JSON.stringify({
+                        bounds: tpl.bounds,
+                        context: tpl.context,
+                        gateContent: { intent: tpl.intent },
+                        ttlConfig: { max: tpl.ttl },
+                        templateMode: tpl.mode,
+                        templateTtl: tpl.ttl,
+                      }));
+                      navigate('/agent/gate');
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem' }}>
+                      <span className={`template-mode template-mode-${tpl.mode === 'automatic' ? 'auto' : 'review'}`}>
+                        {tpl.mode === 'automatic' ? 'Auto' : 'Review'}
+                      </span>
+                      <span className="template-risk" data-risk={tpl.risk}>{tpl.risk}</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                      {tpl.name}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '0.5rem' }}>
+                      {tpl.description}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                      {tpl.tags.map(tag => (
+                        <span key={tag} className="template-tag">{tag}</span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>
+                Or <a href="/agent/new" style={{ color: 'var(--accent)' }}>create a custom authorization</a>
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Unconfigured state — show credential form */}

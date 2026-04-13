@@ -72,6 +72,30 @@
       "get_profile": { "category": "read" }
     }
   },
+  "templates": [
+    {
+      "name": "Read Inbox",
+      "description": "Search and read emails. Cannot send, draft, or delete.",
+      "risk": "low",
+      "mode": "automatic",
+      "bounds": { "recipient_max": "0", "send_daily_max": "0", "read_max_age_days": "30", "read_daily_max": "100" },
+      "context": { "allowed_recipients": "", "allowed_domains": "" },
+      "intent": "Allow the agent to search and read my inbox (last 30 days). No sending or deleting.",
+      "ttl": 2592000,
+      "tags": ["read-only", "30 days", "100 reads/day"]
+    },
+    {
+      "name": "Send with Review",
+      "description": "Read inbox and compose emails. Every outbound email requires your approval.",
+      "risk": "high",
+      "mode": "review",
+      "bounds": { "recipient_max": "5", "send_daily_max": "20", "read_max_age_days": "90", "read_daily_max": "200" },
+      "context": { "allowed_recipients": "", "allowed_domains": "" },
+      "intent": "Read my inbox and compose emails. Every send requires my review — I see the recipient, subject, and body before it goes out.",
+      "ttl": 2592000,
+      "tags": ["5 recipients/email", "20 sends/day", "review mode"]
+    }
+  ],
   "setupHint": "Create OAuth credentials at Google Cloud Console.",
   "setupGuide": [
     {

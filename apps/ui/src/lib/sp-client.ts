@@ -76,6 +76,18 @@ export interface VaultStatus {
   serviceCount: number;
 }
 
+export interface AuthTemplate {
+  name: string;
+  description: string;
+  risk: 'low' | 'medium' | 'high';
+  mode: 'automatic' | 'review';
+  bounds: Record<string, string>;
+  context: Record<string, string>;
+  intent: string;
+  ttl: number;
+  tags: string[];
+}
+
 export interface IntegrationManifest {
   id: string;
   name: string;
@@ -97,6 +109,7 @@ export interface IntegrationManifest {
     extraParams?: Record<string, string>;
   } | null;
   toolGating: unknown;
+  templates?: AuthTemplate[];
   setupHint?: string;
   setupGuide?: Array<{ title: string; description: string; link?: string }>;
 }
