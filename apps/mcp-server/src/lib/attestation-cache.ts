@@ -132,4 +132,12 @@ export class AttestationCache {
   cacheAuthorization(auth: CachedAuthorization): void {
     this.authorizations.set(auth.path, auth);
   }
+
+  /**
+   * Remove a cached authorization by path. Called when the SP reports the
+   * attestation has been revoked, so subsequent list calls reflect reality.
+   */
+  invalidate(path: string): void {
+    this.authorizations.delete(path);
+  }
 }

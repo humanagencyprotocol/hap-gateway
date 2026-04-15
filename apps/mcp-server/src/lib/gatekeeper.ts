@@ -67,20 +67,22 @@ export class MCPGatekeeper {
     // Get SP public key
     const publicKeyHex = await this.cache.getPublicKey();
 
-    // Build Gatekeeper request.
-    // Context is NOT re-verified at execution time — it was verified once when the
-    // authorization was created. Re-verifying fails because the declared context
-    // (from authorization) differs from the execution context (from tool call).
     const resolvedBounds = override?.bounds ?? auth.bounds ?? auth.frame;
+    const resolvedContext = override?.context ?? auth.context;
 
     // Ensure profile is present with the full URI — needed for profile resolution.
     // The bounds may have the short name ('customers') or full URI; use full URI from auth.
     const frame = { ...resolvedBounds, profile: auth.profileId };
 
+    // Context carries the declared allowed set (e.g., allowed_recipients).
+    // hap-core's checkContextConstraints compares execution values against it
+    // to enforce subset/enum/pattern constraints. Required locally per spec —
+    // the SP only holds context_hash and cannot enforce context constraints.
     const request: GatekeeperRequest = {
       frame,
       attestations: auth.attestations.map(a => a.blob),
       execution,
+      context: resolvedContext,
     };
 
     const result = await verify(request, publicKeyHex, undefined, this.executionLog);

@@ -227,7 +227,12 @@ export function createGatedToolHandler(
           });
         } catch (err) {
           if (err instanceof SPReceiptError && err.statusCode === 403) {
-            // SP rejected — limit exceeded or revoked
+            // SP rejected — limit exceeded or revoked. If revoked, purge the
+            // cached attestation so list-authorizations/list-integrations
+            // reflect reality instead of serving a stale "authorized" view.
+            if (/revoked/i.test(err.message)) {
+              state.cache.invalidate(auth.path);
+            }
             return {
               content: [{ type: 'text', text: `Blocked by SP: ${err.message}` }],
               isError: true,
