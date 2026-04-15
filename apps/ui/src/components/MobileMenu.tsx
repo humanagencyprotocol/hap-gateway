@@ -11,7 +11,6 @@ const THEME_ICONS: Record<string, string> = {
 
 const NAV_ITEMS = [
   { to: '/', icon: '\u25A1', label: 'Dashboard' },
-  { to: '/agent/new', icon: '\u25C8', label: 'Authorize' },
   { to: '/proposals', icon: '\u25B7', label: 'Pending Reviews' },
   { to: '/authorizations', icon: '\u2630', label: 'Authorizations' },
   { to: '/audit', icon: '\u25A3', label: 'Activity Log' },

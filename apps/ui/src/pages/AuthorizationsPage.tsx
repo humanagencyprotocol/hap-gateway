@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { spClient, type PendingItem, type GateContentEntry } from '../lib/sp-client';
-import { ProfileBadge } from '../components/ProfileBadge';
+import { profileDisplayName } from '../lib/profile-display';
+import { AuthorizePicker } from '../components/AuthorizePicker';
+import { useSearchParams } from 'react-router-dom';
 import { StatusBadge } from '../components/StatusBadge';
 import { DomainBadge } from '../components/DomainBadge';
 import { TTLBadge } from '../components/TTLBadge';
@@ -40,6 +42,10 @@ export function AuthorizationsPage() {
   const [items, setItems] = useState<PendingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('active');
+  const [profileFilter, setProfileFilter] = useState<string | null>(null);
+  const [modeFilter, setModeFilter] = useState<'auto' | 'review' | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showPicker, setShowPicker] = useState(() => searchParams.get('new') === '1');
   const [expandedHash, setExpandedHash] = useState<string | null>(null);
   const [gateCache, setGateCache] = useState<Record<string, GateContentEntry | null>>({});
   const [gateLoading, setGateLoading] = useState<string | null>(null);
@@ -112,8 +118,33 @@ export function AuthorizationsPage() {
     revoked: items.filter(i => getStatus(i, revokedSet) === 'revoked').length,
   };
 
+  // Profile summary: one entry per distinct profile, with count (under current
+  // status filter) and whether any authorization is in review mode.
+  const profileSummary = (() => {
+    const map = new Map<string, { count: number; review: boolean }>();
+    for (const item of items) {
+      if (getStatus(item, revokedSet) !== activeFilter) continue;
+      const entry = map.get(item.profile_id) ?? { count: 0, review: false };
+      entry.count += 1;
+      if (item.deferred_commitment_domains.length > 0) entry.review = true;
+      map.set(item.profile_id, entry);
+    }
+    return Array.from(map.entries())
+      .map(([profileId, meta]) => ({ profileId, ...meta }))
+      .sort((a, b) => profileDisplayName(a.profileId).localeCompare(profileDisplayName(b.profileId)));
+  })();
+
   const filtered = sortItems(
-    items.filter(i => getStatus(i, revokedSet) === activeFilter),
+    items.filter(i => {
+      if (getStatus(i, revokedSet) !== activeFilter) return false;
+      if (profileFilter !== null && i.profile_id !== profileFilter) return false;
+      if (modeFilter !== null) {
+        const isReview = i.deferred_commitment_domains.length > 0;
+        if (modeFilter === 'review' && !isReview) return false;
+        if (modeFilter === 'auto' && isReview) return false;
+      }
+      return true;
+    }),
     revokedSet,
   );
 
@@ -122,10 +153,59 @@ export function AuthorizationsPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h1 className="page-title">Authorizations</h1>
-        <p className="page-subtitle">Active, pending, and expired agent authorizations.</p>
+      <div
+        className="page-header"
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}
+      >
+        <div>
+          <h1 className="page-title">Authorizations</h1>
+          <p className="page-subtitle">Active, pending, and expired agent authorizations.</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowPicker(true)}>
+          + New authorization
+        </button>
       </div>
+
+      {showPicker && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            setShowPicker(false);
+            if (searchParams.get('new')) {
+              searchParams.delete('new');
+              setSearchParams(searchParams, { replace: true });
+            }
+          }}
+        >
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '960px', width: '90vw' }}
+          >
+            <div className="modal-header">
+              <h2 className="modal-title">New authorization</h2>
+              <button
+                className="modal-close"
+                onClick={() => {
+                  setShowPicker(false);
+                  if (searchParams.get('new')) {
+                    searchParams.delete('new');
+                    setSearchParams(searchParams, { replace: true });
+                  }
+                }}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem', marginTop: 0, marginBottom: '1rem' }}>
+                What should your agent be able to do? Pick a profile, set limits, then authorize.
+              </p>
+              <AuthorizePicker onDismiss={() => setShowPicker(false)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div className="nav-tabs">
@@ -133,14 +213,67 @@ export function AuthorizationsPage() {
           <button
             key={tab}
             className={`nav-tab${activeFilter === tab ? ' active' : ''}`}
-            onClick={() => setActiveFilter(tab)}
+            onClick={() => { setActiveFilter(tab); setProfileFilter(null); setModeFilter(null); }}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)} ({counts[tab]})
           </button>
         ))}
       </div>
 
-      {loading ? (
+      {/* Secondary filter row: profile buttons, a | separator, then mode (auto/review).
+          All toggles are independent and combine. Clicking a selected button clears it. */}
+      {profileSummary.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '0.5rem',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            marginTop: '-0.25rem',
+            marginBottom: '1rem',
+          }}
+        >
+          {profileSummary.map(p => {
+            const selected = profileFilter === p.profileId;
+            return (
+              <button
+                key={p.profileId}
+                className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setProfileFilter(selected ? null : p.profileId)}
+              >
+                {profileDisplayName(p.profileId)}
+              </button>
+            );
+          })}
+
+          <span
+            aria-hidden="true"
+            style={{
+              color: 'var(--border)',
+              fontSize: '1.1rem',
+              padding: '0 0.25rem',
+              userSelect: 'none',
+            }}
+          >
+            |
+          </span>
+
+          {(['auto', 'review'] as const).map(mode => {
+            const selected = modeFilter === mode;
+            return (
+              <button
+                key={mode}
+                className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setModeFilter(selected ? null : mode)}
+              >
+                {mode === 'auto' ? 'Auto' : 'Review'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {loading && items.length === 0 ? (
         <p style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
       ) : filtered.length === 0 ? (
         <EmptyState
@@ -166,10 +299,21 @@ export function AuthorizationsPage() {
               <div className="card" key={item.frame_hash} style={{ marginBottom: 0 }}>
                 {/* Collapsed view */}
                 <div className="auth-card-header">
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      fontSize: '1rem',
+                      color: 'var(--text-primary)',
+                      letterSpacing: '0.01em',
+                    }}
+                  >
+                    {profileDisplayName(item.profile_id)}
+                  </span>
                   {item.title && (
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{item.title}</span>
+                    <span style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      {item.title}
+                    </span>
                   )}
-                  <ProfileBadge profileId={item.profile_id} />
                   <StatusBadge status={status} />
                   {status === 'active' && item.earliest_expiry && (
                     <TTLBadge expiresAt={new Date(item.earliest_expiry).getTime() / 1000} />

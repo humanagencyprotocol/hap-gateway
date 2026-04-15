@@ -63,7 +63,7 @@ export function ProposalReviewPage() {
         <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{message}</div>
       )}
 
-      {loading ? (
+      {loading && proposals.length === 0 ? (
         <p style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
       ) : proposals.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>

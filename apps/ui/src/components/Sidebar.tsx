@@ -13,7 +13,6 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', icon: '\u25A1', label: 'Dashboard' },
-  { to: '/agent/new', icon: '\u25C8', label: 'Authorize' },
   { to: '/proposals', icon: '\u25B7', label: 'Pending Reviews', statusKey: 'proposals' },
   { to: '/authorizations', icon: '\u2630', label: 'Authorizations', statusKey: 'authorizations' },
   { to: '/audit', icon: '\u25A3', label: 'Activity Log' },

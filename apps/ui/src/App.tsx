@@ -4,7 +4,6 @@ import { AppShell } from './components/AppShell';
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { DashboardPage } from './pages/DashboardPage';
-import { AgentNewPage } from './pages/AgentNewPage';
 import { GateWizardPage } from './pages/GateWizardPage';
 import { AgentReviewPage } from './pages/AgentReviewPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
@@ -36,7 +35,7 @@ function AppRoutes() {
         </AuthGuard>
       }>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/agent/new" element={<AgentNewPage />} />
+        <Route path="/agent/new" element={<Navigate to="/authorizations?new=1" replace />} />
         <Route path="/agent/gate" element={<GateWizardPage />} />
         <Route path="/agent/review" element={<AgentReviewPage />} />
         <Route path="/integrations" element={<IntegrationsPage />} />

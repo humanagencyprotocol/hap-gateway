@@ -279,6 +279,22 @@ function FieldRow({
           onChange={v => onChange(fieldKey, v)}
           disabled={readOnly}
         />
+      ) : (() => {
+          const bt = (fieldDef as { boundType?: { kind?: string; values?: unknown } }).boundType;
+          return bt?.kind === 'enum' && Array.isArray(bt.values);
+        })() ? (
+        <select
+          id={fieldId}
+          className="form-select"
+          value={value}
+          onChange={e => onChange(fieldKey, e.target.value)}
+          disabled={readOnly}
+        >
+          <option value="">Select...</option>
+          {((fieldDef as unknown as { boundType: { values: string[] } }).boundType.values).map((v: string) => (
+            <option key={v} value={v}>{v}</option>
+          ))}
+        </select>
       ) : 'enum' in fieldDef && fieldDef.enum ? (
         <select
           id={fieldId}

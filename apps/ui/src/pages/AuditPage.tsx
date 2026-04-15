@@ -220,7 +220,7 @@ export function AuditPage() {
         </div>
       )}
 
-      {loading ? (
+      {loading && receipts.length === 0 ? (
         <p style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
       ) : filtered.length === 0 ? (
         <EmptyState
