@@ -210,8 +210,11 @@ app.post('/internal/service-credentials', internalOnly, (req: Request, res: Resp
   serviceCredentials.set(serviceId, credentials);
   console.error(`[HAP MCP] Service credentials stored for ${serviceId}`);
 
-  // Late-start: try starting integrations that depend on these credentials
-  startPendingIntegrations();
+  // Late-start: only the integration whose credentials just arrived, not
+  // every enabled integration. Bulk-starting unrelated integrations surprises
+  // users who only clicked Start on one. Boot-time restart still covers the
+  // "resume previously running" case.
+  void startIntegrationForService(serviceId);
 
   res.json({ ok: true });
 });
@@ -448,22 +451,44 @@ app.get('/internal/manifests', internalOnly, (_req: Request, res: Response) => {
 async function startPendingIntegrations() {
   const configs = integrationRegistry.getEnabled();
   for (const config of configs) {
-    if (integrationManager.isRunning(config.id)) continue;
+    await startOneIntegration(config);
+  }
+}
 
-    const needsCreds = Object.keys(config.envKeys ?? {}).length > 0;
-    if (needsCreds && !integrationManager.canResolveEnvKeys(config)) continue;
+/**
+ * Start a single integration by id if it's enabled, not running, and its
+ * credentials are resolvable. Used on credential arrival so only the
+ * matching integration is brought up — not a bulk pass over everything.
+ */
+async function startIntegrationForService(serviceId: string) {
+  // An integration's id and the service it binds to are not always identical;
+  // match either the integration id itself, or any integration whose envKeys
+  // reference this service.
+  const candidates = integrationRegistry.getEnabled().filter(c =>
+    c.id === serviceId ||
+    Object.values(c.envKeys ?? {}).some(ref => typeof ref === 'string' && ref.startsWith(`${serviceId}.`)),
+  );
+  for (const config of candidates) {
+    await startOneIntegration(config);
+  }
+}
 
-    // Override stale persisted toolGating and npmPackage with the current manifest.
-    const manifest = getManifest(config.id);
-    const effectiveConfig = manifest
-      ? { ...config, toolGating: manifest.toolGating, npmPackage: manifest.npmPackage ?? config.npmPackage }
-      : config;
+async function startOneIntegration(config: ReturnType<typeof integrationRegistry.getEnabled>[number]) {
+  if (integrationManager.isRunning(config.id)) return;
 
-    try {
-      await integrationManager.startIntegration(effectiveConfig);
-    } catch (err) {
-      console.error(`[HAP MCP] Failed to start integration ${config.id}:`, err);
-    }
+  const needsCreds = Object.keys(config.envKeys ?? {}).length > 0;
+  if (needsCreds && !integrationManager.canResolveEnvKeys(config)) return;
+
+  // Override stale persisted toolGating and npmPackage with the current manifest.
+  const manifest = getManifest(config.id);
+  const effectiveConfig = manifest
+    ? { ...config, toolGating: manifest.toolGating, npmPackage: manifest.npmPackage ?? config.npmPackage }
+    : config;
+
+  try {
+    await integrationManager.startIntegration(effectiveConfig);
+  } catch (err) {
+    console.error(`[HAP MCP] Failed to start integration ${config.id}:`, err);
   }
 }
 
