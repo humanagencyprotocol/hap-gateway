@@ -5,6 +5,7 @@
   "description": "Customer relationship management — contacts, activities, deals, tasks",
   "icon": "users",
   "profile": "customers",
+  "npmPackage": "@humanagencyp/crm-mcp",
   "mcp": {
     "command": "crm-mcp",
     "args": []

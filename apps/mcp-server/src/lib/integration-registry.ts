@@ -58,6 +58,8 @@ export interface IntegrationConfig {
   profile: string | null;
   /** Tool gating from integration manifest (preferred over profile's toolGating). */
   toolGating?: ProfileToolGating;
+  /** npm package to install on-demand (e.g., "@humanagencyp/crm-mcp") */
+  npmPackage?: string;
   /** Whether this integration should be spawned on startup */
   enabled: boolean;
 }

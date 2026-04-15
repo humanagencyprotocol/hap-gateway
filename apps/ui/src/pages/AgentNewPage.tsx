@@ -217,7 +217,7 @@ export function AgentNewPage() {
 
               {/* Custom option */}
               <button
-                className="btn btn-secondary"
+                className="btn btn-primary"
                 style={{ width: '100%', textAlign: 'center', padding: '0.75rem' }}
                 onClick={() => storeAuthAndNavigate(modalProfile.profileId)}
               >

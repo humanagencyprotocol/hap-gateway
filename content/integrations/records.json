@@ -5,6 +5,7 @@
   "description": "Personal knowledge store — notes, decisions, research, bookmarks managed by AI agents",
   "icon": "file-text",
   "profile": "records",
+  "npmPackage": "@humanagencyp/records-mcp",
   "personalDefault": true,
   "mcp": {
     "command": "records-mcp",

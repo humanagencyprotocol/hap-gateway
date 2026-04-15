@@ -453,10 +453,10 @@ async function startPendingIntegrations() {
     const needsCreds = Object.keys(config.envKeys ?? {}).length > 0;
     if (needsCreds && !integrationManager.canResolveEnvKeys(config)) continue;
 
-    // Override stale persisted toolGating with the current manifest.
+    // Override stale persisted toolGating and npmPackage with the current manifest.
     const manifest = getManifest(config.id);
     const effectiveConfig = manifest
-      ? { ...config, toolGating: manifest.toolGating }
+      ? { ...config, toolGating: manifest.toolGating, npmPackage: manifest.npmPackage ?? config.npmPackage }
       : config;
 
     try {
@@ -521,6 +521,7 @@ app.listen(port, '0.0.0.0', () => {
         ...(Object.keys(optionalEnvKeys).length > 0 ? { optionalEnvKeys } : {}),
         profile: manifest.profile,
         toolGating: manifest.toolGating,
+        npmPackage: manifest.npmPackage,
         enabled: true,
       });
       console.error(`[HAP MCP] Auto-registered personal integration: ${manifest.id}`);

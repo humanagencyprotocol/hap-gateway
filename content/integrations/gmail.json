@@ -5,6 +5,7 @@
   "description": "Send, draft, and read email via Gmail",
   "icon": "mail",
   "profile": "email",
+  "npmPackage": "@shinzolabs/gmail-mcp",
   "mcp": {
     "command": "gmail-mcp",
     "args": [],

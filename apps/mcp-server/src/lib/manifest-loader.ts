@@ -48,6 +48,7 @@ export interface IntegrationManifest {
     envMapping: Record<string, string>;
   };
   oauth: ManifestOAuthConfig | null;
+  npmPackage?: string;
   personalDefault?: boolean;
   toolGating: ProfileToolGating;
   setupHint?: string;

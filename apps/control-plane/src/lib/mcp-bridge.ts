@@ -122,6 +122,7 @@ export async function activateIntegration(manifest: {
   };
   profile: string;
   toolGating?: unknown;
+  npmPackage?: string;
 }): Promise<unknown> {
   // Construct envKeys by prepending integration ID to each credential key.
   // Skip optional credential fields — the downstream server handles defaults.
@@ -148,6 +149,7 @@ export async function activateIntegration(manifest: {
     ...(Object.keys(optionalEnvKeys).length > 0 ? { optionalEnvKeys } : {}),
     profile: manifest.profile,
     toolGating: manifest.toolGating,
+    npmPackage: manifest.npmPackage,
     enabled: true,
   });
 }

@@ -5,33 +5,39 @@
  * Each downstream server runs as a child process communicating via stdio.
  */
 
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
+import { existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { getProfile } from '@hap/core';
 import type { ProfileToolGating } from '@hap/core';
 import type { IntegrationConfig, ToolGatingConfig } from './integration-registry';
 
+const DEFAULT_DATA_DIR = process.env.HAP_DATA_DIR ?? `${process.env.HOME}/.hap`;
+const INTEGRATIONS_DIR = join(DEFAULT_DATA_DIR, 'integrations');
+const INTEGRATIONS_BIN = join(INTEGRATIONS_DIR, 'node_modules', '.bin');
+
 /**
- * Build PATH that includes node_modules/.bin directories so that
- * MCP server binaries installed as npm dependencies are found.
- * Walks up from this file to find the nearest node_modules/.bin.
+ * Build PATH that includes the managed integrations directory
+ * so on-demand installed MCP server binaries are found.
  */
 function buildPath(): string {
   const base = process.env.PATH ?? '';
-  const bins: string[] = [];
+  return [INTEGRATIONS_BIN, base].join(':');
+}
 
-  // Walk up from the current file to find node_modules/.bin directories
-  let dir = __dirname;
-  for (let i = 0; i < 6; i++) {
-    const candidate = join(dir, 'node_modules', '.bin');
-    bins.push(candidate);
-    const parent = resolve(dir, '..');
-    if (parent === dir) break;
-    dir = parent;
+/**
+ * Ensure the integrations directory has a package.json.
+ */
+function ensureIntegrationsDir(): void {
+  if (!existsSync(INTEGRATIONS_DIR)) {
+    mkdirSync(INTEGRATIONS_DIR, { recursive: true });
   }
-
-  return [...bins, base].join(':');
+  const pkgPath = join(INTEGRATIONS_DIR, 'package.json');
+  if (!existsSync(pkgPath)) {
+    writeFileSync(pkgPath, JSON.stringify({ name: 'hap-integrations', version: '1.0.0', private: true }, null, 2));
+  }
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -81,9 +87,35 @@ export class IntegrationManager {
   }
 
   /**
+   * Install an npm package into the managed integrations directory if not already present.
+   * Called automatically before spawning when config.npmPackage is set.
+   */
+  private ensureInstalled(npmPackage: string): void {
+    ensureIntegrationsDir();
+
+    // Check if already installed
+    const binName = npmPackage.split('/').pop()?.replace(/^@/, '') ?? npmPackage;
+    const installed = existsSync(join(INTEGRATIONS_DIR, 'node_modules', ...npmPackage.split('/')));
+    if (installed) return;
+
+    console.error(`[IntegrationManager] Installing ${npmPackage}...`);
+    try {
+      execSync(`npm install --no-fund --no-audit ${npmPackage}`, {
+        cwd: INTEGRATIONS_DIR,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 120_000,
+      });
+      console.error(`[IntegrationManager] Installed ${npmPackage}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to install ${npmPackage}: ${message}`);
+    }
+  }
+
+  /**
    * Start a downstream MCP server integration.
-   * Resolves envKeys from serviceCredentials, spawns the process,
-   * connects as MCP client, and discovers tools.
+   * Installs npm package on-demand if needed, resolves envKeys,
+   * spawns the process, connects as MCP client, and discovers tools.
    */
   async startIntegration(config: IntegrationConfig): Promise<DiscoveredTool[]> {
     // Stop if already running
@@ -91,11 +123,16 @@ export class IntegrationManager {
       await this.stopIntegration(config.id);
     }
 
+    // Install npm package on-demand if specified
+    if (config.npmPackage) {
+      this.ensureInstalled(config.npmPackage);
+    }
+
     // Resolve environment variables from vault references
     const env = this.resolveEnvKeys(config);
 
     // Create stdio transport (spawns child process)
-    // PATH is extended with node_modules/.bin so npm-installed MCP servers are found
+    // PATH includes ~/.hap/integrations/node_modules/.bin for on-demand installed packages
     const transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
