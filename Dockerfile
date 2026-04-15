@@ -49,6 +49,10 @@ ENV HAP_BUILD_SHA=$GIT_SHA
 # Set UI dist path for control-plane
 ENV HAP_UI_DIST=/app/apps/ui/dist
 ENV HAP_DATA_DIR=/app/data
+# Keep integration node_modules OUTSIDE the mounted /app/data volume — they
+# contain arch-specific native binaries (better-sqlite3) that must not be
+# shared between the container and a macOS/Windows host.
+ENV HAP_INTEGRATIONS_DIR=/app/integrations
 ENV HAP_CP_PORT=3000
 ENV HAP_MCP_PORT=3030
 ENV HAP_MCP_INTERNAL_URL=http://127.0.0.1:3030

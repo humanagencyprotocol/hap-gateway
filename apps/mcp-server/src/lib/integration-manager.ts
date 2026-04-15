@@ -15,7 +15,12 @@ import type { ProfileToolGating } from '@hap/core';
 import type { IntegrationConfig, ToolGatingConfig } from './integration-registry';
 
 const DEFAULT_DATA_DIR = process.env.HAP_DATA_DIR ?? `${process.env.HOME}/.hap`;
-const INTEGRATIONS_DIR = join(DEFAULT_DATA_DIR, 'integrations');
+// Integration node_modules (native binaries like better-sqlite3) are arch-
+// specific. In docker, HAP_INTEGRATIONS_DIR should point outside the mounted
+// host volume so a macOS ↔ Linux host never sees the other's .node files.
+// Defaults to DEFAULT_DATA_DIR/integrations for local dev, which is fine
+// because the host arch never changes.
+const INTEGRATIONS_DIR = process.env.HAP_INTEGRATIONS_DIR ?? join(DEFAULT_DATA_DIR, 'integrations');
 const INTEGRATIONS_BIN = join(INTEGRATIONS_DIR, 'node_modules', '.bin');
 
 /**
@@ -132,11 +137,20 @@ export class IntegrationManager {
     const env = this.resolveEnvKeys(config);
 
     // Create stdio transport (spawns child process)
-    // PATH includes ~/.hap/integrations/node_modules/.bin for on-demand installed packages
+    // PATH includes ~/.hap/integrations/node_modules/.bin for on-demand installed packages.
+    // HAP_DATA_DIR is forwarded so sub-MCPs (crm, records) write their SQLite DBs to
+    // the same directory the gateway uses — critical in docker where HOME=/root
+    // but the mounted volume is /app/data.
     const transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
-      env: { ...process.env, PATH: buildPath(), ...config.env, ...env } as Record<string, string>,
+      env: {
+        ...process.env,
+        PATH: buildPath(),
+        HAP_DATA_DIR: DEFAULT_DATA_DIR,
+        ...config.env,
+        ...env,
+      } as Record<string, string>,
     });
 
     // Create MCP client
