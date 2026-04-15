@@ -208,16 +208,21 @@ export function AgentNewPage() {
                 ))}
               </div>
 
-              {/* Custom option */}
-              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ width: '100%', textAlign: 'center' }}
-                  onClick={() => storeAuthAndNavigate(modalProfile.profileId)}
-                >
-                  Custom — define your own limits and scope
-                </button>
+              {/* OR divider */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1.5rem 0' }}>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or</span>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
               </div>
+
+              {/* Custom option */}
+              <button
+                className="btn btn-secondary"
+                style={{ width: '100%', textAlign: 'center', padding: '0.75rem' }}
+                onClick={() => storeAuthAndNavigate(modalProfile.profileId)}
+              >
+                Custom — define your own limits and scope
+              </button>
             </div>
           </div>
         </div>
