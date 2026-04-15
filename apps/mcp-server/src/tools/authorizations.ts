@@ -161,6 +161,18 @@ export function listAuthorizationsHandler(
           }
         }
 
+        // Context (allowed scope — stored locally, never sent to SP)
+        if (auth.context) {
+          const contextEntries = Object.entries(auth.context).filter(([, v]) => v !== '' && v !== undefined);
+          if (contextEntries.length > 0) {
+            output.push('');
+            output.push('  Scope:');
+            for (const [k, v] of contextEntries) {
+              output.push(`    ${k}: ${v}`);
+            }
+          }
+        }
+
         // Gate content
         if (auth.gateContent?.intent) {
           output.push('');

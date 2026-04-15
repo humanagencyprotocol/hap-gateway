@@ -13,6 +13,10 @@
   },
   "dependencies": {
     "@hap/core": "workspace:*",
+    "@humanagencyp/crm-mcp": "*",
+    "@humanagencyp/linkedin-mcp": "*",
+    "@humanagencyp/records-mcp": "*",
+    "@shinzolabs/gmail-mcp": "*",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "express": "^4.18.0",
     "zod": "^3.22.0"

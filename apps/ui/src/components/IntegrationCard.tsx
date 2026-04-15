@@ -275,6 +275,11 @@ export function IntegrationCard({ manifest, integration, profiles, onStatusChang
         const hasValues = manifest.credentials.fields.some(f => credValues[f.key]?.trim());
         return (
           <>
+            {manifest.oauth && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
+                Step 1 of 2 — enter credentials, then connect your account.
+              </p>
+            )}
             {manifest.setupHint && (
               <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.75rem' }}>
                 {manifest.setupHint}
@@ -337,8 +342,11 @@ export function IntegrationCard({ manifest, integration, profiles, onStatusChang
       {/* Needs OAuth */}
       {cardState === 'needs-oauth' && (
         <>
-          <div style={{ fontSize: '0.8rem', color: 'var(--success)', marginBottom: '0.75rem' }}>
-            {'\u2713'} Credentials configured
+          <div style={{ fontSize: '0.8rem', color: 'var(--success)', marginBottom: '0.25rem' }}>
+            {'\u2713'} Step 1 done — credentials saved
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+            Step 2: connect your {manifest.name} account to authorize access.
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={startOAuth}>

@@ -5,11 +5,34 @@
  * Each downstream server runs as a child process communicating via stdio.
  */
 
+import { join, resolve } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { getProfile } from '@hap/core';
 import type { ProfileToolGating } from '@hap/core';
 import type { IntegrationConfig, ToolGatingConfig } from './integration-registry';
+
+/**
+ * Build PATH that includes node_modules/.bin directories so that
+ * MCP server binaries installed as npm dependencies are found.
+ * Walks up from this file to find the nearest node_modules/.bin.
+ */
+function buildPath(): string {
+  const base = process.env.PATH ?? '';
+  const bins: string[] = [];
+
+  // Walk up from the current file to find node_modules/.bin directories
+  let dir = __dirname;
+  for (let i = 0; i < 6; i++) {
+    const candidate = join(dir, 'node_modules', '.bin');
+    bins.push(candidate);
+    const parent = resolve(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  return [...bins, base].join(':');
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -72,10 +95,11 @@ export class IntegrationManager {
     const env = this.resolveEnvKeys(config);
 
     // Create stdio transport (spawns child process)
+    // PATH is extended with node_modules/.bin so npm-installed MCP servers are found
     const transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
-      env: { ...process.env, ...config.env, ...env } as Record<string, string>,
+      env: { ...process.env, PATH: buildPath(), ...config.env, ...env } as Record<string, string>,
     });
 
     // Create MCP client
