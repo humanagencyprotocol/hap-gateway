@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { spClient, type IntegrationManifest, type McpIntegrationStatus, type ProfileSummary } from '../lib/sp-client';
+import { spClient, type IntegrationManifest, type McpIntegrationStatus } from '../lib/sp-client';
 import { IntegrationCard } from '../components/IntegrationCard';
 
 export function IntegrationsPage() {
   const [manifests, setManifests] = useState<IntegrationManifest[]>([]);
   const [integrations, setIntegrations] = useState<McpIntegrationStatus[]>([]);
-  const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [mcpServerUp, setMcpServerUp] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [successMsg, setSuccessMsg] = useState('');
@@ -18,13 +17,11 @@ export function IntegrationsPage() {
   const loadStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const [manifestsData, healthData, profileList] = await Promise.all([
+      const [manifestsData, healthData] = await Promise.all([
         spClient.getIntegrationManifests().catch(() => ({ manifests: [] })),
         spClient.getMcpHealth().catch(() => null),
-        spClient.listProfiles().catch(() => []),
       ]);
       setManifests(manifestsData.manifests);
-      setProfiles(profileList);
       if (healthData) {
         setMcpServerUp(true);
         setIntegrations(healthData.integrations);
@@ -81,7 +78,6 @@ export function IntegrationsPage() {
               key={manifest.id}
               manifest={manifest}
               integration={integrations.find(i => i.id === manifest.id)}
-              profiles={profiles}
               onStatusChange={loadStatus}
               onSuccess={showSuccess}
             />

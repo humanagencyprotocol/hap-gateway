@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { spClient, type ProfileSummary, type IntegrationManifest, type McpIntegrationStatus } from '../lib/sp-client';
+import { spClient, type ProfileSummary, type IntegrationManifest, type McpIntegrationStatus, type AuthTemplate } from '../lib/sp-client';
 import { profileDisplayName } from '../lib/profile-display';
 
 export function AgentNewPage() {
@@ -12,6 +12,7 @@ export function AgentNewPage() {
   const [integrations, setIntegrations] = useState<McpIntegrationStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [teamProfiles, setTeamProfiles] = useState<Record<string, Record<string, string[]>>>({});
+  const [modalProfile, setModalProfile] = useState<{ profileId: string; manifest: IntegrationManifest } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -48,13 +49,8 @@ export function AgentNewPage() {
     return profileId in teamProfiles && Object.keys(teamProfiles[profileId]).length > 0;
   };
 
-  const handleCreate = (profileId: string) => {
-    // v0.4: every attestation requires a group_id. In personal mode this is
-    // the user's auto-provisioned personal group; in team mode it's the
-    // currently active team group. The flag below is only used for UI
-    // labeling — the SP runs the same checks for both.
+  const storeAuthAndNavigate = (profileId: string, template?: AuthTemplate) => {
     if (!groupId) {
-      // Should not happen — AuthContext sets the personal group on login.
       console.error('No active group when creating authorization');
       return;
     }
@@ -66,7 +62,36 @@ export function AgentNewPage() {
       domain,
       isTeam,
     }));
+    if (template) {
+      sessionStorage.setItem('agentGate', JSON.stringify({
+        bounds: template.bounds,
+        context: template.context,
+        gateContent: { intent: template.intent },
+        ttlConfig: { max: template.ttl },
+        templateMode: template.mode,
+        templateTtl: template.ttl,
+      }));
+    } else {
+      sessionStorage.removeItem('agentGate');
+    }
+    setModalProfile(null);
     navigate('/agent/gate');
+  };
+
+  const handleCreate = (profileId: string) => {
+    if (!groupId) {
+      console.error('No active group when creating authorization');
+      return;
+    }
+    // Find the manifest for this profile to check for templates
+    const shortId = profileId.replace(/@.*$/, '').split('/').pop() ?? profileId;
+    const manifest = profileManifestMap.get(shortId);
+
+    if (manifest?.templates && manifest.templates.length > 0) {
+      setModalProfile({ profileId, manifest });
+    } else {
+      storeAuthAndNavigate(profileId);
+    }
   };
 
   return (
@@ -139,6 +164,62 @@ export function AgentNewPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Template / Custom modal */}
+      {modalProfile && (
+        <div className="modal-backdrop" onClick={() => setModalProfile(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Set up {modalProfile.manifest.name} authorization</h2>
+              <button className="modal-close" onClick={() => setModalProfile(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              {/* Quick start templates */}
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem', fontWeight: 600 }}>
+                Quick start
+              </p>
+              <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: `repeat(${Math.min(modalProfile.manifest.templates!.length, 3)}, 1fr)` }}>
+                {modalProfile.manifest.templates!.map((tpl) => (
+                  <button
+                    key={tpl.name}
+                    className="template-card"
+                    onClick={() => storeAuthAndNavigate(modalProfile.profileId, tpl)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem' }}>
+                      <span className={`template-mode template-mode-${tpl.mode === 'automatic' ? 'auto' : 'review'}`}>
+                        {tpl.mode === 'automatic' ? 'Auto' : 'Review'}
+                      </span>
+                      <span className="template-risk" data-risk={tpl.risk}>{tpl.risk}</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                      {tpl.name}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '0.5rem' }}>
+                      {tpl.description}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                      {tpl.tags.map(tag => (
+                        <span key={tag} className="template-tag">{tag}</span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom option */}
+              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ width: '100%', textAlign: 'center' }}
+                  onClick={() => storeAuthAndNavigate(modalProfile.profileId)}
+                >
+                  Custom — define your own limits and scope
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </>
