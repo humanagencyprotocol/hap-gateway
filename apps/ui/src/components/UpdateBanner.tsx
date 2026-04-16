@@ -5,13 +5,9 @@ import { useUpdateCheck } from '../hooks/useUpdateCheck';
 // an older instance was started under a different name), then pull and run.
 const UPDATE_CMD = 'docker rm -f hap-gateway 2>/dev/null; docker ps -q --filter publish=7400 --filter publish=7430 | xargs -r docker rm -f; docker pull ghcr.io/humanagencyprotocol/hap-gateway:latest && docker run -d --name hap-gateway -p 7400:3000 -p 7430:3030 -v $HOME/.hap:/app/data ghcr.io/humanagencyprotocol/hap-gateway';
 
-// In dev, always render the banner so we can iterate on its design without
-// needing a released new version. In prod, useUpdateCheck drives visibility.
-const FORCE_SHOW = import.meta.env.DEV;
-
 export function UpdateBanner() {
   const { updateAvailable } = useUpdateCheck();
-  const show = updateAvailable || FORCE_SHOW;
+  const show = updateAvailable;
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
