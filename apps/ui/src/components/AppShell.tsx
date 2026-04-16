@@ -11,10 +11,10 @@ export function AppShell() {
   return (
     <>
       <TopNav onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
+      <UpdateBanner />
       <Sidebar />
       <MobileMenu open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
       <div className="main-content">
-        <UpdateBanner />
         <div className="page-inner">
           <Outlet />
         </div>

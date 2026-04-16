@@ -110,7 +110,7 @@ export function AuditPage() {
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Activity Log</h1>
+        <h1 className="page-title">Receipts</h1>
         <p className="page-subtitle">Execution history for agent actions.</p>
       </div>
 

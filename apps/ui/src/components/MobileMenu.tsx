@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { to: '/', icon: '\u25A1', label: 'Dashboard' },
   { to: '/proposals', icon: '\u25B7', label: 'Pending Reviews' },
   { to: '/authorizations', icon: '\u2630', label: 'Authorizations' },
-  { to: '/audit', icon: '\u25A3', label: 'Activity Log' },
+  { to: '/audit', icon: '\u25A3', label: 'Receipts' },
   { to: '/groups', icon: '\u25C9', label: 'Team' },
   { to: '/integrations', icon: '\u29D7', label: 'Integrations' },
   { to: '/settings', icon: '\u2699', label: 'AI Assistant' },
