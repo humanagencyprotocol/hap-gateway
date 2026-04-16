@@ -71,14 +71,14 @@ export function LoginPage() {
               {isLoading ? 'Signing in...' : 'Sign In'}
             </button>
 
-            <div className="login-divider">new here?</div>
+            <div className="login-divider">New here?</div>
 
             <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
                 Create an account on humanagencyprotocol.com,<br />then come back to sign in.
               </p>
               <a
-                href="https://www.humanagencyprotocol.com/register"
+                href="https://www.humanagencyprotocol.com/get-started"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary btn-full"
@@ -93,7 +93,11 @@ export function LoginPage() {
                 Getting started
               </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                {['Create an account at humanagencyprotocol.com', 'Join or create a team to get domain authority', 'Sign in here with your API key to start authorizing agents'].map((text, i) => (
+                {[
+                  <>Create an account at <a href="https://www.humanagencyprotocol.com/get-started" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>humanagencyprotocol.com</a></>,
+                  'Join or create a team to get domain authority',
+                  'Sign in here with your API key to start authorizing agents',
+                ].map((text, i) => (
                   <div key={i} style={{ display: 'flex', gap: '0.625rem', alignItems: 'baseline', marginBottom: i < 2 ? '0.5rem' : 0 }}>
                     <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '0.95rem' }}>{i + 1}.</span>
                     {text}
