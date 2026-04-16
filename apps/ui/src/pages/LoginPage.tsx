@@ -27,10 +27,10 @@ export function LoginPage() {
         <div className="login-split-left">
           <div style={{ maxWidth: '28rem' }}>
             <h1 style={{ fontSize: 'clamp(2.25rem, 4vw, 3.25rem)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '1.25rem' }}>
-              Your checkpoint for <span style={{ color: 'var(--accent)' }}>your local AI agents.</span>
+              Your checkpoint for <span style={{ color: 'var(--accent)' }}>the agents you authorize.</span>
             </h1>
             <p style={{ fontSize: '1.125rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '3rem' }}>
-              The gateway runs on your machine, between your agents and the tools they use. Nothing executes without your authorization.
+              The gateway runs on your machine, between your agents and the tools they use. Your signature. Your bounds. Your receipts.
             </p>
           </div>
         </div>
