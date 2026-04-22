@@ -7,15 +7,19 @@ export function useUpdateCheck() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    const check = () => {
-      fetch('/health')
+    // First call: ?refresh=1 forces a fresh GHCR check on the backend.
+    // This is the "on login / reload" path — users who just opened the app
+    // get an accurate update status in this round-trip. Subsequent interval
+    // calls omit the flag and use the backend's hourly cache.
+    const check = (forceRefresh = false) => {
+      fetch(forceRefresh ? '/health?refresh=1' : '/health')
         .then(r => r.json())
         .then(data => { if (data.updateAvailable) setUpdateAvailable(true); })
         .catch(() => {});
     };
 
-    check();
-    const id = setInterval(check, CHECK_INTERVAL);
+    check(true);
+    const id = setInterval(() => check(false), CHECK_INTERVAL);
     return () => clearInterval(id);
   }, []);
 

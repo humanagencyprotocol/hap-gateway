@@ -21,7 +21,7 @@ import { createAIRouter } from './routes/ai';
 import { requireAuth } from './middleware/auth';
 import { pushGateContent, pushServiceCredentials, setInternalSecret, getManifests, getGateContent } from './lib/mcp-bridge';
 import { createMCPRouter } from './routes/mcp';
-import { startUpdateChecker, getUpdateStatus } from './lib/update-checker';
+import { startUpdateChecker, getUpdateStatus, forceCheck } from './lib/update-checker';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
 const port = parseInt(process.env.HAP_CP_PORT ?? '3402', 10);
@@ -289,7 +289,13 @@ app.use(
 
 // ─── Health check (public) ──────────────────────────────────────────────
 
-app.get('/health', (_req: Request, res: Response) => {
+app.get('/health', async (req: Request, res: Response) => {
+  // ?refresh=1 → force a GHCR re-check before responding. Used by the UI on
+  // mount/login so a just-arrived user gets the true update state in the same
+  // round-trip, without waiting for the next hourly background tick.
+  if (req.query.refresh === '1') {
+    await forceCheck();
+  }
   const update = getUpdateStatus();
   res.json({
     status: 'ok',
