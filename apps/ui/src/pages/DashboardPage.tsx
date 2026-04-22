@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { spClient, type PendingItem, type Proposal, type McpIntegrationStatus } from '../lib/sp-client';
+import { spClient, type PendingItem, type Proposal } from '../lib/sp-client';
 import { SetupGuide } from '../components/SetupGuide';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
+import { useIntegrationStatus } from '../contexts/IntegrationStatusContext';
 
 const EXPIRY_WARN_SECONDS = 30 * 60; // 30 minutes
 
@@ -15,33 +16,36 @@ export function DashboardPage() {
   const { domain } = useAuth();
   const [auths, setAuths] = useState<PendingItem[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [integrations, setIntegrations] = useState<McpIntegrationStatus[]>([]);
   const [aiConfigured, setAiConfigured] = useState(true);
-  const [activeSessions, setActiveSessions] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const { entries: integrationEntries, activeSessions, loading: integrationsLoading } = useIntegrationStatus();
 
   const refresh = useCallback(async () => {
     await Promise.all([
       spClient.getMyAttestations().then(setAuths).catch(() => {}),
       spClient.getProposals(domain || 'owner').then(setProposals).catch(() => {}),
-      spClient.getMcpIntegrations().then(d => setIntegrations(d.integrations ?? [])).catch(() => {}),
       spClient.getCredential('ai-config').then(s => setAiConfigured(s.configured)).catch(() => {}),
-      spClient.getMcpHealth().then(h => setActiveSessions(h.activeSessions ?? 0)).catch(() => {}),
     ]);
-    setLoading(false);
+    setLoadedOnce(true);
   }, [domain]);
 
-  // Poll so the dashboard catches up after the post-login integration-startup
-  // race. Fires on mount, refreshes on tab focus, and ticks every 15s while
-  // visible. Restarts when the active domain changes.
+  // Poll non-integration data. Integration status comes from the shared
+  // IntegrationStatusContext (single source of truth across Sidebar /
+  // Dashboard / IntegrationsPage — no cross-view disagreement).
   useVisiblePolling(refresh, 15_000, domain);
+
+  const loading = !loadedOnce || integrationsLoading;
 
   // Compute counts
   const active = auths.filter(a => a.remaining_seconds !== null && a.remaining_seconds > 0);
   const expired = auths.filter(a => a.remaining_seconds === null || a.remaining_seconds <= 0);
   const soonExpiring = active.filter(a => a.remaining_seconds !== null && a.remaining_seconds <= EXPIRY_WARN_SECONDS);
   const pendingProposals = proposals.filter(p => p.status === 'pending');
-  const stoppedIntegrations = integrations.filter(i => !i.running);
+  const runningIntegrations = integrationEntries.filter(e => e.state === 'running');
+  const startingIntegrations = integrationEntries.filter(e => e.state === 'starting');
+  const attentionIntegrations = integrationEntries.filter(
+    e => e.state === 'not-running' || e.state === 'error',
+  );
   const todayReceipts = 0; // Could fetch but keep it simple
 
   // Attention items
@@ -75,12 +79,22 @@ export function DashboardPage() {
     });
   }
 
-  for (const i of stoppedIntegrations) {
+  for (const e of attentionIntegrations) {
     attentionItems.push({
-      label: 'Integration stopped',
-      detail: `${i.name} is not running`,
+      label: e.state === 'error' ? 'Integration error' : 'Integration stopped',
+      detail: e.state === 'error' && e.integration?.error
+        ? `${e.manifest.name}: ${e.integration.error}`
+        : `${e.manifest.name} is not running`,
       to: '/integrations',
       color: 'var(--danger)',
+    });
+  }
+  for (const e of startingIntegrations) {
+    attentionItems.push({
+      label: 'Integration starting',
+      detail: `${e.manifest.name} is coming up…`,
+      to: '/integrations',
+      color: 'var(--warning)',
     });
   }
 
@@ -113,7 +127,7 @@ export function DashboardPage() {
       {/* Setup guide */}
       <SetupGuide
         aiConfigured={aiConfigured}
-        hasRunningIntegration={integrations.some(i => i.running)}
+        hasRunningIntegration={runningIntegrations.length > 0}
         hasActiveAuth={active.length > 0}
         hasAgentConnected={activeSessions > 0}
         mcpEndpoint={`http://localhost:${window.location.port === '3400' ? '3430' : '7430'}`}
@@ -147,8 +161,8 @@ export function DashboardPage() {
         </Link>
         <Link to="/integrations" style={{ textDecoration: 'none' }}>
           <div className="card" style={{ padding: '1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: integrations.length > 0 ? 'var(--success)' : 'var(--text-tertiary)' }}>
-              {integrations.filter(i => i.running).length}
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: runningIntegrations.length > 0 ? 'var(--success)' : 'var(--text-tertiary)' }}>
+              {runningIntegrations.length}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Integrations Running</div>
           </div>

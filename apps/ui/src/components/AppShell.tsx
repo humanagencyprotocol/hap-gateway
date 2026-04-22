@@ -4,12 +4,13 @@ import { TopNav } from './TopNav';
 import { Sidebar } from './Sidebar';
 import { UpdateBanner } from './UpdateBanner';
 import { MobileMenu } from './MobileMenu';
+import { IntegrationStatusProvider } from '../contexts/IntegrationStatusContext';
 
 export function AppShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <>
+    <IntegrationStatusProvider>
       <TopNav onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} />
       <UpdateBanner />
       <Sidebar />
@@ -19,6 +20,6 @@ export function AppShell() {
           <Outlet />
         </div>
       </div>
-    </>
+    </IntegrationStatusProvider>
   );
 }

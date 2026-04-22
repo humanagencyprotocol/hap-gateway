@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { spClient, type IntegrationManifest, type McpIntegrationStatus } from '../lib/sp-client';
+import type { IntegrationState } from '../contexts/IntegrationStatusContext';
 
 const ICON_MAP: Record<string, string> = {
   card: '\u{1F4B3}',
@@ -10,13 +11,18 @@ const ICON_MAP: Record<string, string> = {
 interface Props {
   manifest: IntegrationManifest;
   integration: McpIntegrationStatus | undefined;
+  /**
+   * Canonical state derived by IntegrationStatusContext. Drives the status
+   * chip so Sidebar/Dashboard/IntegrationsPage agree by construction.
+   */
+  state: IntegrationState;
   onStatusChange: () => void;
   onSuccess: (msg: string) => void;
 }
 
-type CardState = 'unconfigured' | 'needs-oauth' | 'ready' | 'running';
+type CardState = 'unconfigured' | 'needs-oauth' | 'ready' | 'running' | 'starting';
 
-export function IntegrationCard({ manifest, integration, onStatusChange, onSuccess }: Props) {
+export function IntegrationCard({ manifest, integration, state, onStatusChange, onSuccess }: Props) {
   const [credValues, setCredValues] = useState<Record<string, string>>({});
   const [credConfigured, setCredConfigured] = useState(false);
   const [credsOnFile, setCredsOnFile] = useState(false); // vault has credentials stored
@@ -41,6 +47,10 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
   }, [manifest.id, manifest.oauth]);
 
   const cardState: CardState = (() => {
+    // Surface the context's starting state so users see a clear "Starting…"
+    // affordance rather than the old "Not running" flicker during post-login
+    // subprocess spawn.
+    if (state === 'starting') return 'starting';
     if (integration?.running) return 'running';
     if (!credConfigured) return 'unconfigured';
     if (manifest.oauth && !oauthConnected) return 'needs-oauth';
@@ -189,6 +199,15 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Starting state — subprocess is coming up after login; shown
+          deliberately instead of "Not running" to stop the post-login flicker. */}
+      {cardState === 'starting' && (
+        <div className="service-status" style={{ color: 'var(--warning)' }}>
+          <span className="service-status-dot" style={{ background: 'var(--warning)' }} />
+          Starting…
         </div>
       )}
 

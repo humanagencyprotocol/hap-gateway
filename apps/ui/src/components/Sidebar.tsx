@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useState, useCallback } from 'react';
 import { spClient } from '../lib/sp-client';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
+import { useIntegrationStatus } from '../contexts/IntegrationStatusContext';
 
 interface NavItem {
   to: string;
@@ -22,38 +23,34 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/settings', icon: '\u2699', label: 'AI Assistant', statusKey: 'assistant' },
 ];
 
-function useNavStatus() {
+/**
+ * Non-integration badge counts (AI config, authorizations, proposals).
+ * Integration counts come from the shared IntegrationStatusContext below
+ * so Sidebar / Dashboard / IntegrationsPage can't disagree.
+ */
+function useOtherNavStatus() {
   const { activeDomain } = useAuth();
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   const poll = useCallback(async () => {
     try {
-      const [intData, aiStatus, authData, proposalData] = await Promise.all([
-        spClient.getMcpIntegrations().catch(() => null),
+      const [aiStatus, authData, proposalData] = await Promise.all([
         spClient.getCredential('ai-config').catch(() => null),
         spClient.getMyAttestations().catch(() => null),
         spClient.getProposals(activeDomain || 'owner').catch(() => null),
       ]);
 
       const next: Record<string, number> = {};
-
-      if (intData?.integrations) {
-        const notRunning = intData.integrations.filter(i => !i.running).length;
-        if (notRunning > 0) next.integrations = notRunning;
-      }
-      if (aiStatus && !aiStatus.configured) {
-        next.assistant = 1;
-      }
+      if (aiStatus && !aiStatus.configured) next.assistant = 1;
       if (authData) {
         const expired = authData.filter(
-          a => a.remaining_seconds === null || a.remaining_seconds <= 0
+          a => a.remaining_seconds === null || a.remaining_seconds <= 0,
         ).length;
         if (expired > 0) next.authorizations = expired;
       }
       if (proposalData && proposalData.length > 0) {
         next.proposals = proposalData.length;
       }
-
       setCounts(next);
     } catch {
       // ignore
@@ -61,7 +58,6 @@ function useNavStatus() {
   }, [activeDomain]);
 
   useVisiblePolling(poll, 60_000, activeDomain);
-
   return counts;
 }
 
@@ -83,7 +79,10 @@ const BADGE_STYLE: React.CSSProperties = {
 
 export function Sidebar() {
   const { mode, group, domain } = useAuth();
-  const counts = useNavStatus();
+  const other = useOtherNavStatus();
+  const { attentionCount } = useIntegrationStatus();
+  const counts: Record<string, number> = { ...other };
+  if (attentionCount > 0) counts.integrations = attentionCount;
 
   const visibleItems = NAV_ITEMS.filter(item => !item.teamOnly || mode === 'team');
 
