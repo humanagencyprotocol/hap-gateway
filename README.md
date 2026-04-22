@@ -4,7 +4,7 @@ Part of [humanagencyprotocol.com](https://humanagencyprotocol.com) — applying 
 
 Let your AI agents act — within bounds you control.
 
-The gateway runs on your machine, between your AI agents and the tools they use — payments, email, CRM, deployments, infrastructure. Your agents go through a local checkpoint before reaching external services. Nothing executes without authorization.
+The gateway runs on your machine, between your AI agents and the tools they use — payments, email, CRM, deployments, infrastructure. Your agents go through a local policy layer before reaching external services. Nothing executes without authorization.
 
 Works with any MCP-compatible agent. Define and authorize what they're allowed to do. Every action is bounded, time-limited, and traceable to a human decision — so agents can execute safely at scale.
 
@@ -87,6 +87,17 @@ Any MCP-compatible client can connect:
 Streamable HTTP:  POST http://localhost:7430/mcp
 SSE transport:    GET  http://localhost:7430/sse
 ```
+
+### Local development
+
+Running from source (no Docker) gives you hot-reload across all three services:
+
+```bash
+pnpm install
+pnpm dev          # UI on :3400, control plane on :3402, MCP on :3430
+```
+
+See [`docs/development.md`](docs/development.md) for environment variables, testing, and per-service dev commands.
 
 ---
 
