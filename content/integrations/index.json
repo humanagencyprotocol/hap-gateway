@@ -4,6 +4,7 @@
     "gmail": "gmail.json",
     "crm": "crm.json",
     "records": "records.json",
-    "linkedin": "linkedin.json"
+    "linkedin": "linkedin.json",
+    "calendar": "calendar.json"
   }
 }
