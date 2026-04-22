@@ -22,7 +22,7 @@ export function DashboardPage() {
   useEffect(() => {
     Promise.all([
       spClient.getMyAttestations().then(setAuths).catch(() => {}),
-      spClient.getProposals(domain).then(setProposals).catch(() => {}),
+      spClient.getProposals(domain || 'owner').then(setProposals).catch(() => {}),
       spClient.getMcpIntegrations().then(d => setIntegrations(d.integrations ?? [])).catch(() => {}),
       spClient.getCredential('ai-config').then(s => setAiConfigured(s.configured)).catch(() => {}),
       spClient.getMcpHealth().then(h => setActiveSessions(h.activeSessions ?? 0)).catch(() => {}),

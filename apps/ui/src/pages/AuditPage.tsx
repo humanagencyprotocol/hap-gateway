@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { spClient, type ExecutionReceipt } from '../lib/sp-client';
 import { profileDisplayName } from '../lib/profile-display';
 import { ProfileBadge } from '../components/ProfileBadge';
 import { EmptyState } from '../components/EmptyState';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 type TimeRange = '1d' | '7d' | '30d' | 'all';
 
@@ -50,13 +51,7 @@ export function AuditPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetchReceipts(); }, [fetchReceipts]);
-
-  // Auto-refresh every 30s
-  useEffect(() => {
-    const interval = setInterval(fetchReceipts, 30000);
-    return () => clearInterval(interval);
-  }, [fetchReceipts]);
+  useVisiblePolling(fetchReceipts, 120_000);
 
   // Derive available profiles and actions from data
   const availableProfiles = useMemo(() => {

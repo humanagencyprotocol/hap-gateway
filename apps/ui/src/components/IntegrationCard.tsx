@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { spClient, type IntegrationManifest, type McpIntegrationStatus } from '../lib/sp-client';
 
 const ICON_MAP: Record<string, string> = {
@@ -18,6 +19,7 @@ type CardState = 'unconfigured' | 'needs-oauth' | 'ready' | 'running';
 export function IntegrationCard({ manifest, integration, onStatusChange, onSuccess }: Props) {
   const [credValues, setCredValues] = useState<Record<string, string>>({});
   const [credConfigured, setCredConfigured] = useState(false);
+  const [credsOnFile, setCredsOnFile] = useState(false); // vault has credentials stored
   const [oauthConnected, setOauthConnected] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
@@ -29,6 +31,7 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
     spClient.getCredential(manifest.id).then(status => {
       if (status.configured) {
         setCredConfigured(true);
+        setCredsOnFile(true);
         // Check if OAuth token exists
         if (manifest.oauth) {
           setOauthConnected(status.fieldNames?.includes(manifest.oauth.tokenStorage) ?? false);
@@ -52,7 +55,14 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
       await spClient.setCredential(manifest.id, credValues);
       setCredConfigured(true);
       setCredValues({});
-      onSuccess(`${manifest.name} credentials saved!`);
+      // Auto-start: if this integration doesn't need OAuth, activating now
+      // skips the dead state where credentials are saved but nothing runs.
+      if (!manifest.oauth) {
+        onSuccess(`${manifest.name} credentials saved — starting integration...`);
+        await activate();
+      } else {
+        onSuccess(`${manifest.name} credentials saved!`);
+      }
     } catch {
       onSuccess(`Failed to save ${manifest.name} credentials`);
     } finally {
@@ -68,7 +78,9 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
         if (cred.configured && manifest.oauth && cred.fieldNames?.includes(manifest.oauth.tokenStorage)) {
           setOauthConnected(true);
           clearInterval(poll);
-          onSuccess(`${manifest.name} connected!`);
+          onSuccess(`${manifest.name} connected — starting integration...`);
+          // Auto-start after OAuth completes so the user doesn't have to click Start separately.
+          await activate();
         }
       } catch { /* ignore */ }
     }, 2000);
@@ -192,16 +204,17 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
               className="btn btn-sm btn-ghost"
               style={{ color: 'var(--danger)' }}
               onClick={remove}
+              title="Stops the subprocess and removes the integration from the registry. It will NOT auto-start on next gateway restart. Re-enable with Install."
             >
-              Stop
+              Disable
             </button>
           </div>
 
           {/* Link to authorize */}
           <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-            <a href="/agent/new" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
+            <Link to="/agent/new" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}>
               Authorize your agent
-            </a>
+            </Link>
           </div>
         </>
       )}
@@ -213,12 +226,32 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
         const hasValues = manifest.credentials.fields.some(f => credValues[f.key]?.trim());
         return (
           <>
-            {manifest.oauth && (
+            {credsOnFile && (
+              <div className="alert" style={{
+                fontSize: '0.8rem',
+                background: 'var(--bg-main)',
+                border: '1px solid var(--border)',
+                borderRadius: '0.375rem',
+                padding: '0.5rem 0.75rem',
+                marginBottom: '0.75rem',
+                color: 'var(--text-secondary)',
+              }}>
+                <strong style={{ color: 'var(--text-primary)' }}>Credentials on file.</strong>{' '}
+                Existing values are encrypted in the vault and not shown. Enter new values below to replace them, or{' '}
+                <button
+                  onClick={() => { setCredConfigured(true); if (manifest.oauth) setOauthConnected(true); }}
+                  style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  keep existing
+                </button>.
+              </div>
+            )}
+            {manifest.oauth && !credsOnFile && (
               <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
                 Step 1 of 2 — enter credentials, then connect your account.
               </p>
             )}
-            {manifest.setupHint && (
+            {manifest.setupHint && !credsOnFile && (
               <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.75rem' }}>
                 {manifest.setupHint}
               </p>
@@ -325,12 +358,12 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
         </>
       )}
 
-      {/* Stopped but registered — offer restart */}
+      {/* Stopped but registered — offer retry */}
       {cardState === 'ready' && integration && !integration.running && (
         <>
           <div className="service-status service-status-error" style={{ marginBottom: '0.75rem' }}>
             <span className="service-status-dot" />
-            Stopped
+            Not running
           </div>
           {integration.error && (
             <div style={{ fontSize: '0.8rem', color: 'var(--danger)', marginBottom: '0.75rem' }}>
@@ -339,10 +372,10 @@ export function IntegrationCard({ manifest, integration, onStatusChange, onSucce
           )}
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button className="btn btn-primary" onClick={activate} disabled={activating}>
-              {activating ? 'Starting...' : 'Restart'}
+              {activating ? 'Starting...' : 'Start'}
             </button>
             <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={remove}>
-              Remove
+              Disable
             </button>
           </div>
         </>

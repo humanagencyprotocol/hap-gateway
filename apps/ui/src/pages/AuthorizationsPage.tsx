@@ -8,6 +8,7 @@ import { DomainBadge } from '../components/DomainBadge';
 import { TTLBadge } from '../components/TTLBadge';
 import { EmptyState } from '../components/EmptyState';
 import { ExtendAuthModal } from '../components/ExtendAuthModal';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 type StatusFilter = 'active' | 'pending' | 'expired' | 'revoked';
 type Status = 'active' | 'pending' | 'expired' | 'revoked';
@@ -62,13 +63,7 @@ export function AuthorizationsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
-
-  // Auto-refresh countdown every 30s
-  useEffect(() => {
-    const interval = setInterval(fetchItems, 30000);
-    return () => clearInterval(interval);
-  }, [fetchItems]);
+  useVisiblePolling(fetchItems, 120_000);
 
   const handleExpand = async (item: PendingItem) => {
     if (expandedHash === item.frame_hash) {

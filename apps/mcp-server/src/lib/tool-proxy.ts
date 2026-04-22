@@ -12,6 +12,45 @@
 import type { IntegrationManager, DiscoveredTool } from './integration-manager';
 import type { SharedState, EnrichedAuthorization } from './shared-state';
 import { SPReceiptError } from './sp-client';
+import { readFile } from 'node:fs/promises';
+import { extname } from 'node:path';
+
+const IMAGE_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.avif': 'image/avif',
+};
+
+// Cap preview payload: proposals are stored in Redis and fetched on every
+// thread poll. 1 MB file → ~1.3 MB base64. Larger files skip the preview
+// and the card just shows the path as text.
+const MAX_PREVIEW_BYTES = 1 * 1024 * 1024;
+
+/**
+ * If the tool call passes a local image path, read the file and attach a
+ * data-URL preview to toolArgs so the review card can render it. The actual
+ * tool execution still uses the original imagePath (downstream MCP reads the
+ * file at execute time). The _imagePreview key is informational only and is
+ * ignored by the downstream tool's zod schema.
+ */
+async function attachImagePreview(args: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const imagePath = typeof args.imagePath === 'string' ? args.imagePath : null;
+  if (!imagePath) return args;
+  if (args._imagePreview) return args; // already attached
+  try {
+    const mime = IMAGE_MIME[extname(imagePath).toLowerCase()];
+    if (!mime) return args;
+    const buf = await readFile(imagePath);
+    if (buf.byteLength > MAX_PREVIEW_BYTES) return args; // don't bloat proposals
+    return { ...args, _imagePreview: `data:${mime};base64,${buf.toString('base64')}` };
+  } catch {
+    return args; // file unreadable — show path only
+  }
+}
 
 /**
  * Apply a single mapping entry to produce an execution context field.
@@ -167,13 +206,14 @@ export function createGatedToolHandler(
         // Check for deferred commitment domains — submit proposal instead of executing
         if (auth.deferredCommitmentDomains.length > 0) {
           try {
+            const enrichedArgs = await attachImagePreview(args);
             const { proposal } = await state.spClient.submitProposal({
               frameHash: auth.boundsHash ?? auth.frameHash,
               profileId: auth.profileId,
               path: auth.path,
               pendingDomains: auth.deferredCommitmentDomains,
               tool: tool.namespacedName,
-              toolArgs: args,
+              toolArgs: enrichedArgs,
               executionContext: { ...execution },
             });
             return {

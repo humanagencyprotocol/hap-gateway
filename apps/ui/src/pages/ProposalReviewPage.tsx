@@ -1,30 +1,42 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { spClient, type Proposal } from '../lib/sp-client';
+import { spClient, type Proposal, type ExecutionReceipt } from '../lib/sp-client';
+import { aggregateThread, type ThreadItem } from '../lib/thread-aggregator';
+import { ActionCard } from '../components/ActionCard';
+import { profileDisplayName } from '../lib/profile-display';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
+
+type StatusFilter = 'pending' | 'all';
 
 export function ProposalReviewPage() {
   const { domain } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [receipts, setReceipts] = useState<ExecutionReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState<string | null>(null);
   const [message, setMessage] = useState('');
 
-  const fetchProposals = useCallback(async () => {
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
+  const [profileFilter, setProfileFilter] = useState<string | null>(null);
+  const [includeAutonomous, setIncludeAutonomous] = useState(false);
+
+  const fetchThread = useCallback(async () => {
     try {
-      const items = await spClient.getProposals(domain);
-      setProposals(items);
+      const { proposals: ps, receipts: rs } = await spClient.getThread({
+        domain,
+        status: statusFilter,
+        sinceDays: 7,
+      });
+      setProposals(ps);
+      setReceipts(rs);
     } catch {
-      // ignore
+      // ignore — background refresh, keep previous state
     } finally {
       setLoading(false);
     }
-  }, [domain]);
+  }, [domain, statusFilter]);
 
-  useEffect(() => {
-    fetchProposals();
-    const interval = setInterval(fetchProposals, 10_000);
-    return () => clearInterval(interval);
-  }, [fetchProposals]);
+  useVisiblePolling(fetchThread, 30_000, `${domain}:${statusFilter}`);
 
   const handleResolve = async (id: string, action: 'commit' | 'reject') => {
     setResolving(id);
@@ -32,12 +44,8 @@ export function ProposalReviewPage() {
     try {
       const resolveDomain = domain || 'owner';
       const result = await spClient.resolveProposal(id, action, resolveDomain);
-      if (action === 'commit') {
-        setMessage(`Action approved. Status: ${result.status}`);
-      } else {
-        setMessage('Action rejected.');
-      }
-      await fetchProposals();
+      setMessage(action === 'commit' ? `Action approved. Status: ${result.status}` : 'Action rejected.');
+      await fetchThread();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Failed');
     } finally {
@@ -45,17 +53,29 @@ export function ProposalReviewPage() {
     }
   };
 
-  const shortProfile = (id: string) => {
-    const withoutVersion = id.replace(/@.*$/, '');
-    return withoutVersion.split('/').pop() ?? id;
-  };
+  // Profile chips: union of profile IDs present in either list, sorted.
+  const profileIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of proposals) set.add(p.profileId);
+    for (const r of receipts) set.add(r.profileId);
+    return Array.from(set).sort();
+  }, [proposals, receipts]);
+
+  const items: ThreadItem[] = useMemo(
+    () => aggregateThread(proposals, receipts, {
+      status: statusFilter,
+      profile: profileFilter ?? undefined,
+      includeAutonomous,
+    }),
+    [proposals, receipts, statusFilter, profileFilter, includeAutonomous],
+  );
 
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Pending Reviews</h1>
+        <h1 className="page-title">Action Thread</h1>
         <p className="page-subtitle">
-          Agent actions awaiting your review. Approve or reject each action.
+          Agent actions — pending reviews and recent activity from the last 7 days.
         </p>
       </div>
 
@@ -63,111 +83,73 @@ export function ProposalReviewPage() {
         <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{message}</div>
       )}
 
-      {loading && proposals.length === 0 ? (
-        <p style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
-      ) : proposals.length === 0 ? (
+      {/* Filter chips */}
+      <div className="filter-chips" style={{ marginBottom: '1rem' }}>
+        <button
+          className={`filter-chip ${statusFilter === 'pending' ? 'selected' : ''}`}
+          onClick={() => setStatusFilter('pending')}
+        >
+          Pending
+        </button>
+        <button
+          className={`filter-chip ${statusFilter === 'all' ? 'selected' : ''}`}
+          onClick={() => setStatusFilter('all')}
+        >
+          All
+        </button>
+
+        {profileIds.length > 0 && (
+          <span style={{ width: 1, background: 'var(--border)', alignSelf: 'stretch', margin: '0 0.25rem' }} />
+        )}
+
+        {profileIds.map((pid) => (
+          <button
+            key={pid}
+            className={`filter-chip ${profileFilter === pid ? 'selected' : ''}`}
+            onClick={() => setProfileFilter(profileFilter === pid ? null : pid)}
+          >
+            {profileDisplayName(pid)}
+          </button>
+        ))}
+
+        {statusFilter === 'all' && (
+          <>
+            <span style={{ width: 1, background: 'var(--border)', alignSelf: 'stretch', margin: '0 0.25rem' }} />
+            <button
+              className={`filter-chip ${includeAutonomous ? 'selected' : ''}`}
+              onClick={() => setIncludeAutonomous(!includeAutonomous)}
+              title="Include actions executed without human review (automatic commitment mode)"
+            >
+              {includeAutonomous ? '✓ ' : ''}Autonomous actions
+            </button>
+          </>
+        )}
+      </div>
+
+      {loading && items.length === 0 ? (
+        <p style={{ color: 'var(--text-tertiary)' }}>Loading…</p>
+      ) : items.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
-          <p style={{ color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>No pending reviews</p>
+          <p style={{ color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
+            {statusFilter === 'pending' ? 'No actions awaiting your review.' : 'Nothing here yet.'}
+          </p>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
-            When an agent calls a tool with deferred commitment, actions will appear here for your review.
+            {statusFilter === 'pending'
+              ? 'Your agents are operating within their authorizations. Switch to All to see recent activity.'
+              : 'When an agent calls a gated tool, activity will appear here.'}
           </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {proposals.map(p => {
-            const isResolving = resolving === p.id;
-            const remainingMs = p.expiresAt * 1000 - Date.now();
-            const remainingMin = Math.max(0, Math.ceil(remainingMs / 60_000));
-            const committed = Object.keys(p.committedBy);
-            const remaining = p.pendingDomains.filter(d => !(d in p.committedBy));
-
-            return (
-              <div className="card" key={p.id}>
-                {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                  <span className="profile-badge">{shortProfile(p.profileId)}</span>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{p.path}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                    {remainingMin} min remaining
-                  </span>
-                </div>
-
-                {/* Tool + Args */}
-                <div style={{ marginBottom: '0.75rem' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>
-                    Tool
-                  </div>
-                  <code style={{ fontSize: '0.85rem' }}>{p.tool}</code>
-                </div>
-
-                <div style={{ marginBottom: '0.75rem' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>
-                    Arguments
-                  </div>
-                  <pre style={{
-                    fontSize: '0.8rem',
-                    background: 'var(--bg-main)',
-                    padding: '0.5rem',
-                    borderRadius: '0.375rem',
-                    border: '1px solid var(--border)',
-                    overflow: 'auto',
-                    maxHeight: '12rem',
-                  }}>
-                    {JSON.stringify(p.toolArgs, null, 2)}
-                  </pre>
-                </div>
-
-                {/* Execution Context */}
-                {Object.keys(p.executionContext).length > 0 && (
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>
-                      Execution Context
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {Object.entries(p.executionContext).map(([k, v]) => `${k}=${v}`).join(' · ')}
-                    </div>
-                  </div>
-                )}
-
-                {/* Domain status */}
-                {p.pendingDomains.length > 1 && (
-                  <div style={{ marginBottom: '0.75rem', fontSize: '0.8rem' }}>
-                    <span style={{ color: 'var(--success)' }}>
-                      Committed: {committed.length > 0 ? committed.join(', ') : 'none'}
-                    </span>
-                    {' · '}
-                    <span style={{ color: 'var(--warning)' }}>
-                      Remaining: {remaining.join(', ')}
-                    </span>
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => handleResolve(p.id, 'commit')}
-                    disabled={isResolving}
-                  >
-                    {isResolving ? 'Approving...' : 'Approve'}
-                  </button>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ color: 'var(--danger)' }}
-                    onClick={() => handleResolve(p.id, 'reject')}
-                    disabled={isResolving}
-                  >
-                    Reject
-                  </button>
-                </div>
-
-                {/* Proposal ID */}
-                <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
-                  Proposal: {p.id}
-                </div>
-              </div>
-            );
-          })}
+          {items.map((item) => (
+            <ActionCard
+              key={item.id}
+              item={item}
+              onApprove={(id) => handleResolve(id, 'commit')}
+              onReject={(id) => handleResolve(id, 'reject')}
+              resolving={resolving === item.id}
+            />
+          ))}
         </div>
       )}
     </>

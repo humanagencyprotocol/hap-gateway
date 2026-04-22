@@ -165,6 +165,8 @@ export interface ExecutionReceipt {
   };
   timestamp: number;
   signature: string;
+  /** Present only on receipts produced via a committed proposal (review mode). */
+  proposalId?: string;
 }
 
 export interface McpHealthResponse {
@@ -499,6 +501,47 @@ class SPClient {
       throw new Error(err.error || `Failed: ${res.status}`);
     }
     return res.json();
+  }
+
+  // ─── Action Thread (homepage feed) ──────────────────────────────────────
+
+  /**
+   * Fetch a merged stream of proposals + receipts for the Action Thread.
+   * The SP's `/api/receipts/mine` endpoint is date-keyed (one day at a
+   * time), so multi-day history is assembled by looping over recent dates.
+   */
+  async getThread(options: {
+    domain: string;
+    sinceDays?: number;
+    status?: 'pending' | 'all';
+    profile?: string;
+    includeAutonomous?: boolean;
+    limit?: number;
+  }): Promise<{ proposals: Proposal[]; receipts: ExecutionReceipt[] }> {
+    const sinceDays = options.sinceDays ?? 7;
+    const status = options.status ?? 'pending';
+
+    // Match the Sidebar's fallback: when the user has no active domain (fresh
+    // session, no group joined yet), query the personal 'owner' domain.
+    const domain = options.domain || 'owner';
+    const proposals = await this.getProposals(domain);
+
+    let receipts: ExecutionReceipt[] = [];
+    if (status === 'all') {
+      const dates: string[] = [];
+      const today = new Date();
+      for (let i = 0; i < sinceDays; i++) {
+        const d = new Date(today);
+        d.setUTCDate(today.getUTCDate() - i);
+        dates.push(d.toISOString().slice(0, 10));
+      }
+      const perDay = await Promise.all(
+        dates.map((date) => this.getMyReceipts({ date, profile: options.profile })),
+      );
+      receipts = perDay.flat();
+    }
+
+    return { proposals, receipts };
   }
 
   // ─── Gate Content ───────────────────────────────────────────────────────

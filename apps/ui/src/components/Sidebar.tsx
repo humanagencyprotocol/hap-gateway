@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { spClient } from '../lib/sp-client';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 interface NavItem {
   to: string;
@@ -23,95 +24,88 @@ const NAV_ITEMS: NavItem[] = [
 
 function useNavStatus() {
   const { activeDomain } = useAuth();
-  const [statuses, setStatuses] = useState<Record<string, boolean>>({});
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    async function poll() {
-      try {
-        const [intData, aiStatus, authData, proposalData] = await Promise.all([
-          spClient.getMcpIntegrations().catch(() => null),
-          spClient.getCredential('ai-config').catch(() => null),
-          spClient.getMyAttestations().catch(() => null),
-          spClient.getProposals(activeDomain || 'owner').catch(() => null),
-        ]);
+  const poll = useCallback(async () => {
+    try {
+      const [intData, aiStatus, authData, proposalData] = await Promise.all([
+        spClient.getMcpIntegrations().catch(() => null),
+        spClient.getCredential('ai-config').catch(() => null),
+        spClient.getMyAttestations().catch(() => null),
+        spClient.getProposals(activeDomain || 'owner').catch(() => null),
+      ]);
 
-        const next: Record<string, boolean> = {};
+      const next: Record<string, number> = {};
 
-        // Integrations: warn if any registered but not running
-        if (intData?.integrations) {
-          const all = intData.integrations;
-          if (all.length > 0 && all.some(i => !i.running)) {
-            next.integrations = true;
-          }
-        }
-
-        // AI Assistant: warn if not configured
-        if (aiStatus && !aiStatus.configured) {
-          next.assistant = true;
-        }
-
-        // Authorizations: warn if any expired
-        if (authData) {
-          const hasExpired = authData.some(
-            a => a.remaining_seconds === null || a.remaining_seconds <= 0
-          );
-          if (hasExpired) {
-            next.authorizations = true;
-          }
-        }
-
-        // Proposals: warn if any pending
-        if (proposalData && proposalData.length > 0) {
-          next.proposals = true;
-        }
-
-        setStatuses(next);
-      } catch {
-        // Ignore errors
+      if (intData?.integrations) {
+        const notRunning = intData.integrations.filter(i => !i.running).length;
+        if (notRunning > 0) next.integrations = notRunning;
       }
-    }
+      if (aiStatus && !aiStatus.configured) {
+        next.assistant = 1;
+      }
+      if (authData) {
+        const expired = authData.filter(
+          a => a.remaining_seconds === null || a.remaining_seconds <= 0
+        ).length;
+        if (expired > 0) next.authorizations = expired;
+      }
+      if (proposalData && proposalData.length > 0) {
+        next.proposals = proposalData.length;
+      }
 
-    poll();
-    const interval = setInterval(poll, 15000);
-    return () => clearInterval(interval);
+      setCounts(next);
+    } catch {
+      // ignore
+    }
   }, [activeDomain]);
 
-  return statuses;
+  useVisiblePolling(poll, 60_000, activeDomain);
+
+  return counts;
 }
 
-const DOT_STYLE: React.CSSProperties = {
-  width: '0.4rem',
-  height: '0.4rem',
-  borderRadius: '50%',
-  background: 'var(--warning)',
-  flexShrink: 0,
+const BADGE_STYLE: React.CSSProperties = {
   marginLeft: 'auto',
+  minWidth: '1.25rem',
+  height: '1.25rem',
+  padding: '0 0.375rem',
+  borderRadius: '0.625rem',
+  background: 'var(--warning)',
+  color: 'var(--bg-elevated)',
+  fontSize: '0.7rem',
+  fontWeight: 600,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
 };
 
 export function Sidebar() {
   const { mode, group, domain } = useAuth();
-  const warnings = useNavStatus();
+  const counts = useNavStatus();
 
   const visibleItems = NAV_ITEMS.filter(item => !item.teamOnly || mode === 'team');
 
   return (
     <div className="sidebar">
       <ul className="sidebar-nav">
-        {visibleItems.map(item => (
-          <li key={item.to}>
-            <NavLink
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) => `sidebar-item${isActive ? ' active' : ''}`}
-            >
-              <span className="icon">{item.icon}</span>
-              {item.label}
-              {item.statusKey && warnings[item.statusKey] && (
-                <span style={DOT_STYLE} />
-              )}
-            </NavLink>
-          </li>
-        ))}
+        {visibleItems.map(item => {
+          const count = item.statusKey ? counts[item.statusKey] : 0;
+          return (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) => `sidebar-item${isActive ? ' active' : ''}`}
+              >
+                <span className="icon">{item.icon}</span>
+                {item.label}
+                {count ? <span style={BADGE_STYLE}>{count}</span> : null}
+              </NavLink>
+            </li>
+          );
+        })}
       </ul>
       <div className="sidebar-context">
         <div className="ctx-label">Active context</div>
