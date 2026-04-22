@@ -1,0 +1,125 @@
+{
+  "id": "calendar",
+  "name": "Google Calendar",
+  "version": "1.0.0",
+  "description": "List, create, update, and delete events in Google Calendar",
+  "icon": "calendar",
+  "profile": "calendar",
+  "npmPackage": "@humanagencyp/google-calendar-mcp",
+  "mcp": {
+    "command": "google-calendar-mcp",
+    "args": []
+  },
+  "credentials": {
+    "fields": [
+      { "key": "clientId", "label": "Client ID", "type": "text", "placeholder": "From Google Cloud Console" },
+      { "key": "clientSecret", "label": "Client Secret", "type": "password", "placeholder": "OAuth2 client secret" }
+    ],
+    "envMapping": {
+      "GOOGLE_CALENDAR_ACCESS_TOKEN": "accessToken"
+    }
+  },
+  "oauth": {
+    "authUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenUrl": "https://oauth2.googleapis.com/token",
+    "scopes": [
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.readonly"
+    ],
+    "credentialKeys": { "clientId": "clientId", "clientSecret": "clientSecret" },
+    "tokenStorage": "accessToken",
+    "extraParams": { "access_type": "offline", "prompt": "consent" }
+  },
+  "toolGating": {
+    "default": {
+      "executionMapping": {},
+      "staticExecution": { "duration": 0, "lookahead": 0 }
+    },
+    "overrides": {
+      "list_calendars": { "category": "read" },
+      "list_events": { "category": "read" },
+      "get_event": { "category": "read" },
+      "free_busy": { "category": "read" },
+      "create_event": {
+        "executionMapping": {
+          "start": { "field": "lookahead", "transform": "days_from_now" },
+          "end": [
+            { "field": "duration", "transform": "minutes_since_start" }
+          ],
+          "attendees": [
+            { "field": "allowed_attendees", "transform": "join" },
+            { "field": "allowed_domains", "transform": "join_domains" }
+          ],
+          "calendarId": "allowed_calendars"
+        },
+        "staticExecution": { "action_type": "write" }
+      },
+      "update_event": {
+        "executionMapping": {
+          "attendees": [
+            { "field": "allowed_attendees", "transform": "join" },
+            { "field": "allowed_domains", "transform": "join_domains" }
+          ],
+          "calendarId": "allowed_calendars"
+        },
+        "staticExecution": { "action_type": "write", "duration": 0, "lookahead": 0 }
+      },
+      "delete_event": {
+        "executionMapping": {
+          "calendarId": "allowed_calendars"
+        },
+        "staticExecution": { "action_type": "delete", "duration": 0, "lookahead": 0 }
+      }
+    }
+  },
+  "templates": [
+    {
+      "name": "Read Calendar",
+      "description": "List and read events, check free/busy. No create, update, or delete.",
+      "risk": "low",
+      "mode": "automatic",
+      "bounds": { "booking_daily_max": "0", "booking_duration_max": "0", "lookahead_days_max": "0" },
+      "context": { "allowed_calendars": "", "allowed_attendees": "", "allowed_domains": "" },
+      "intent": "Allow the agent to list calendars and read events to help with scheduling suggestions. No create or modify.",
+      "ttl": 2592000,
+      "tags": ["read-only", "30 days"]
+    },
+    {
+      "name": "Book with Review",
+      "description": "Read events and propose new bookings. Every create/update/delete requires your approval.",
+      "risk": "high",
+      "mode": "review",
+      "bounds": { "booking_daily_max": "3", "booking_duration_max": "120", "lookahead_days_max": "30" },
+      "context": { "allowed_calendars": "primary", "allowed_attendees": "", "allowed_domains": "" },
+      "intent": "Read my calendar and propose bookings. Every create, update, or delete requires my review — I see the title, time, duration, and attendees before it goes through.",
+      "ttl": 2592000,
+      "tags": ["3 bookings/day", "2h max", "30d lookahead", "review mode"]
+    }
+  ],
+  "setupHint": "Create OAuth credentials at Google Cloud Console and enable the Google Calendar API.",
+  "setupGuide": [
+    {
+      "title": "Create a Google Cloud project",
+      "description": "Go to the Google Cloud Console and create a new project (or reuse your existing Gmail one — both can share a project).",
+      "link": "https://console.cloud.google.com/projectcreate"
+    },
+    {
+      "title": "Enable the Google Calendar API",
+      "description": "In your project, go to APIs & Services > Library, search for 'Google Calendar API', and enable it.",
+      "link": "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"
+    },
+    {
+      "title": "Create OAuth credentials",
+      "description": "APIs & Services > Credentials > Create Credentials > OAuth 2.0 Client ID. Choose 'Web application'.",
+      "link": "https://console.cloud.google.com/apis/credentials"
+    },
+    {
+      "title": "Add the redirect URI",
+      "description": "Under Authorized redirect URIs, add: http://localhost:7400/auth/oauth/calendar/callback (or your gateway URL)."
+    },
+    {
+      "title": "Enter your credentials below",
+      "description": "Copy the Client ID and Client Secret from your OAuth client and paste them below."
+    }
+  ]
+}
