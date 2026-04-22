@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { spClient, type IntegrationManifest, type McpIntegrationStatus } from '../lib/sp-client';
 import { IntegrationCard } from '../components/IntegrationCard';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 export function IntegrationsPage() {
   const [manifests, setManifests] = useState<IntegrationManifest[]>([]);
@@ -15,7 +16,6 @@ export function IntegrationsPage() {
   }, []);
 
   const loadStatus = useCallback(async () => {
-    setLoading(true);
     try {
       const [manifestsData, healthData] = await Promise.all([
         spClient.getIntegrationManifests().catch(() => ({ manifests: [] })),
@@ -34,9 +34,9 @@ export function IntegrationsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    loadStatus();
-  }, [loadStatus]);
+  // Poll so the page catches up after the post-login integration-startup race.
+  // Fires on mount, refreshes on tab focus, and ticks every 15s while visible.
+  useVisiblePolling(loadStatus, 15_000);
 
   return (
     <>

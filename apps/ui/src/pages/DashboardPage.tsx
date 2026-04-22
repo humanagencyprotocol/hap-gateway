@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { spClient, type PendingItem, type Proposal, type McpIntegrationStatus } from '../lib/sp-client';
 import { SetupGuide } from '../components/SetupGuide';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 
 const EXPIRY_WARN_SECONDS = 30 * 60; // 30 minutes
 
@@ -19,15 +20,21 @@ export function DashboardPage() {
   const [activeSessions, setActiveSessions] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([
+  const refresh = useCallback(async () => {
+    await Promise.all([
       spClient.getMyAttestations().then(setAuths).catch(() => {}),
       spClient.getProposals(domain || 'owner').then(setProposals).catch(() => {}),
       spClient.getMcpIntegrations().then(d => setIntegrations(d.integrations ?? [])).catch(() => {}),
       spClient.getCredential('ai-config').then(s => setAiConfigured(s.configured)).catch(() => {}),
       spClient.getMcpHealth().then(h => setActiveSessions(h.activeSessions ?? 0)).catch(() => {}),
-    ]).finally(() => setLoading(false));
+    ]);
+    setLoading(false);
   }, [domain]);
+
+  // Poll so the dashboard catches up after the post-login integration-startup
+  // race. Fires on mount, refreshes on tab focus, and ticks every 15s while
+  // visible. Restarts when the active domain changes.
+  useVisiblePolling(refresh, 15_000, domain);
 
   // Compute counts
   const active = auths.filter(a => a.remaining_seconds !== null && a.remaining_seconds > 0);
