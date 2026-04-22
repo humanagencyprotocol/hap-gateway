@@ -16,7 +16,9 @@
       { "key": "clientSecret", "label": "Client Secret", "type": "password", "placeholder": "OAuth2 client secret" }
     ],
     "envMapping": {
-      "GOOGLE_CALENDAR_ACCESS_TOKEN": "accessToken"
+      "GOOGLE_CLIENT_ID": "clientId",
+      "GOOGLE_CLIENT_SECRET": "clientSecret",
+      "GOOGLE_CALENDAR_REFRESH_TOKEN": "refreshToken"
     }
   },
   "oauth": {
@@ -27,7 +29,7 @@
       "https://www.googleapis.com/auth/calendar.readonly"
     ],
     "credentialKeys": { "clientId": "clientId", "clientSecret": "clientSecret" },
-    "tokenStorage": "accessToken",
+    "tokenStorage": "refreshToken",
     "extraParams": { "access_type": "offline", "prompt": "consent" }
   },
   "toolGating": {
