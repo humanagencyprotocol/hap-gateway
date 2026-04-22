@@ -440,10 +440,21 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 app.get('/internal/gate-content', internalOnly, (req: Request, res: Response) => {
+  // Lookup accepts any identifier we may have stashed on a gate entry:
+  // the legacy v0.3 `path`, the v0.4 `profileId` fallback, the
+  // `boundsHash`, or the compat `frameHash` alias. Previously matched
+  // only on `path`, which is empty for v0.4 attestations — UIs
+  // passing `item.path` got "Gate content not available" even though
+  // the entry was safely stored under profileId / boundsHash.
   const path = req.query.path as string | undefined;
   const gates = state.gateStore.getAll();
   if (path) {
-    const entry = gates.find(g => g.path === path);
+    const entry = gates.find(g =>
+      g.path === path ||
+      g.profileId === path ||
+      g.boundsHash === path ||
+      g.frameHash === path,
+    );
     res.json({ entry: entry ?? null });
   } else {
     res.json({ entries: gates });

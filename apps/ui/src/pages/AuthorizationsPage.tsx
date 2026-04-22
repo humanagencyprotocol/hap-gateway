@@ -72,14 +72,17 @@ export function AuthorizationsPage() {
     }
     setExpandedHash(item.frame_hash);
 
-    // Lazy load gate content on first expand
-    if (!(item.path in gateCache)) {
+    // Lazy load gate content on first expand. v0.4 attestations have no
+    // `path` — the wizard stores gate content under profileId / boundsHash,
+    // so we try frame_hash first (most specific), fall back to profileId.
+    const lookupKey = item.frame_hash || item.profile_id || item.path;
+    if (!(lookupKey in gateCache)) {
       setGateLoading(item.frame_hash);
       try {
-        const entry = await spClient.getGateContent(item.path);
-        setGateCache(prev => ({ ...prev, [item.path]: entry }));
+        const entry = await spClient.getGateContent(lookupKey);
+        setGateCache(prev => ({ ...prev, [lookupKey]: entry }));
       } catch {
-        setGateCache(prev => ({ ...prev, [item.path]: null }));
+        setGateCache(prev => ({ ...prev, [lookupKey]: null }));
       } finally {
         setGateLoading(null);
       }
