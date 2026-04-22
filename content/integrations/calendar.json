@@ -44,10 +44,8 @@
       "free_busy": { "category": "read" },
       "create_event": {
         "executionMapping": {
-          "start": { "field": "lookahead", "transform": "days_from_now" },
-          "end": [
-            { "field": "duration", "transform": "minutes_since_start" }
-          ],
+          "duration_minutes": "duration",
+          "lookahead_days": "lookahead",
           "attendees": [
             { "field": "allowed_attendees", "transform": "join" },
             { "field": "allowed_domains", "transform": "join_domains" }
