@@ -219,6 +219,25 @@ app.post('/internal/service-credentials', internalOnly, (req: Request, res: Resp
   res.json({ ok: true });
 });
 
+/**
+ * Belt-and-suspenders retry: call after the control-plane has pushed
+ * all vault credentials on unlock/login. Covers the edge case where an
+ * integration's envKeys reference a service id that doesn't match the
+ * credId the CP pushed — so the per-credential startIntegrationForService
+ * didn't catch it. Safe to call anytime; already-running integrations
+ * are skipped.
+ */
+app.post('/internal/start-pending-integrations', internalOnly, async (_req: Request, res: Response) => {
+  try {
+    await startPendingIntegrations();
+    const running = integrationManager.getStatus().filter(s => s.running).map(s => s.id);
+    res.json({ ok: true, running });
+  } catch (err) {
+    console.error('[HAP MCP] start-pending-integrations failed:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 app.post('/internal/resync-gates', internalOnly, async (_req: Request, res: Response) => {
   const gates = state.gateStore.getAll();
   if (gates.length === 0) {
@@ -477,7 +496,23 @@ async function startOneIntegration(config: ReturnType<typeof integrationRegistry
   if (integrationManager.isRunning(config.id)) return;
 
   const needsCreds = Object.keys(config.envKeys ?? {}).length > 0;
-  if (needsCreds && !integrationManager.canResolveEnvKeys(config)) return;
+  if (needsCreds && !integrationManager.canResolveEnvKeys(config)) {
+    // Surface which env keys couldn't resolve so operators can see exactly
+    // what the vault is missing (previously this was silent — the integration
+    // just stayed "Not running" with no explanation).
+    const missing: string[] = [];
+    for (const [envKey, vaultRef] of Object.entries(config.envKeys ?? {})) {
+      const [serviceId, key] = (vaultRef as string).split('.', 2);
+      const creds = integrationManager.getServiceCredentials(serviceId);
+      if (!creds || !(key in creds)) {
+        missing.push(`${envKey} <- ${vaultRef}`);
+      }
+    }
+    console.error(
+      `[HAP MCP] ${config.id} cannot start — missing credentials: ${missing.join(', ')}`,
+    );
+    return;
+  }
 
   // Override stale persisted toolGating and npmPackage with the current manifest.
   const manifest = getManifest(config.id);

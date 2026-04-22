@@ -320,6 +320,15 @@ export class IntegrationManager {
   }
 
   /**
+   * Read the credentials stored in memory for a given service id. Used by
+   * startup diagnostics to report which keys are missing when an integration
+   * cannot start — not a general read API.
+   */
+  getServiceCredentials(serviceId: string): Record<string, string> | undefined {
+    return this.serviceCredentials.get(serviceId);
+  }
+
+  /**
    * Gracefully shut down all running integrations.
    */
   async shutdown(): Promise<void> {

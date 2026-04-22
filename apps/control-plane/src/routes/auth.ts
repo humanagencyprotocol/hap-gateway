@@ -8,7 +8,7 @@
  */
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import { configure, pushServiceCredentials, resyncGates, stopAllIntegrations } from '../lib/mcp-bridge';
+import { configure, pushServiceCredentials, resyncGates, startPendingIntegrations, stopAllIntegrations } from '../lib/mcp-bridge';
 import type { Vault } from '../lib/vault';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
@@ -85,7 +85,16 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
       const data = await spRes.json();
       res.json(data);
 
-      // Background: re-push credentials and re-sync gates (non-blocking)
+      // Background: re-push credentials, trigger a pending-integrations retry,
+      // and re-sync gates (non-blocking).
+      //
+      // The per-credential pushServiceCredentials path already fires
+      // startIntegrationForService for integrations whose envKeys reference the
+      // credId. The explicit startPendingIntegrations() afterwards catches
+      // the case where an integration's envKeys reference a service id that
+      // doesn't match the credId — so the sweep sees the updated credentials
+      // and starts everything that's resolvable now. Silently-skipped
+      // integrations log their missing keys on the MCP side.
       (async () => {
         for (const credId of vault.listCredentials()) {
           try {
@@ -97,6 +106,12 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
           } catch (err) {
             console.error(`[Control Plane] Failed to push ${credId} credentials:`, err);
           }
+        }
+        try {
+          const { running } = await startPendingIntegrations();
+          console.error(`[Control Plane] Post-unlock sweep — running: ${running.join(', ') || '(none)'}`);
+        } catch (err) {
+          console.error('[Control Plane] Post-unlock sweep failed:', err);
         }
         try {
           const { synced } = await resyncGates();

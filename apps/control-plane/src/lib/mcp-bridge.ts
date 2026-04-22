@@ -73,6 +73,26 @@ export async function pushServiceCredentials(
   }
 }
 
+/**
+ * Trigger the MCP to sweep its registry and start every enabled integration
+ * whose credentials are now resolvable. Intended to be called by the CP
+ * AFTER all vault credentials have been pushed on login/unlock, as a
+ * belt-and-suspenders pass that catches envKey/credId naming mismatches
+ * the per-credential `pushServiceCredentials → startIntegrationForService`
+ * path would miss.
+ */
+export async function startPendingIntegrations(): Promise<{ running: string[] }> {
+  const res = await fetch(`${MCP_BASE}/internal/start-pending-integrations`, {
+    method: 'POST',
+    headers: internalHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(`MCP startPendingIntegrations failed: ${(err as { error: string }).error}`);
+  }
+  return res.json() as Promise<{ running: string[] }>;
+}
+
 export async function resyncGates(): Promise<{ synced: number }> {
   const res = await fetch(`${MCP_BASE}/internal/resync-gates`, {
     method: 'POST',
