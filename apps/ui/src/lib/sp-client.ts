@@ -627,6 +627,24 @@ class SPClient {
     const data = await res.json() as { brief: string };
     return data.brief;
   }
+
+  // ─── AI chat (multi-turn refinement of context.md or intent) ──────────
+
+  async aiChat(request: {
+    target: { kind: 'context' } | { kind: 'intent'; profileId?: string; path?: string; bounds?: string };
+    currentText: string;
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  }): Promise<{ success: boolean; reply?: string; error?: string }> {
+    const res = await this.fetch('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'AI chat failed' }));
+      return { success: false, error: (err as { error: string }).error || `Chat failed: ${res.status}` };
+    }
+    return res.json() as Promise<{ success: boolean; reply?: string; error?: string }>;
+  }
 }
 
 export const spClient = new SPClient();

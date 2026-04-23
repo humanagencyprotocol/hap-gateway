@@ -166,6 +166,155 @@ export async function getAIAssistance(
   }
 }
 
+// ─── Multi-turn chat (Phase 3 of Agent Brief) ──────────────────────────────
+//
+// Extends the one-shot `getAIAssistance` above with conversational refinement
+// of two documents: the agent brief's context.md, and a per-authorization
+// Intent paragraph. Same provider plumbing; different system prompts and a
+// message history instead of a single question.
+
+export type ChatTarget =
+  | { kind: 'context' }
+  | { kind: 'intent'; profileId?: string; path?: string; bounds?: string };
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AIChatRequest {
+  target: ChatTarget;
+  currentText: string;
+  messages: ChatMessage[];
+}
+
+export interface AIChatResponse {
+  success: boolean;
+  reply?: string;
+  error?: string;
+}
+
+const CHAT_SYSTEM_PROMPTS: Record<ChatTarget['kind'], string> = {
+  context: `You help a human author "context.md" — the standing-orders brief that is prepended to every AI agent session under the Human Agency Protocol (HAP).
+
+This text goes straight into the system prompt of downstream agents. Keep it operational, concrete, and short. Favor examples the user would recognize from their work.
+
+Your role is to:
+- Ask clarifying questions when the user's intent is unclear.
+- Flag gaps or ambiguities that would confuse an agent.
+- Propose concrete phrasings when the user asks for them.
+
+When you propose a complete draft (or a full-document rewrite) of the context, wrap the draft in a fenced block like this:
+
+\`\`\`markdown
+...
+\`\`\`
+
+Only use that fence for full-document drafts the user can click "Apply". For partial suggestions, comments, or questions, write prose without the fence.`,
+
+  intent: `You help a human write an "Intent" paragraph for an AI agent authorization under the Human Agency Protocol (HAP).
+
+The Intent is read by two audiences:
+1. The agent, on demand via list-authorizations(domain), when it's about to act in this domain.
+2. Human reviewers, when the agent proposes an action that needs approval.
+
+A good Intent describes:
+- Why this authorization exists (the situation).
+- What the agent should try to achieve (the goal).
+- Soft rules or watch-outs the agent must honor even inside bounds (e.g. "never publish on weekends", "only reply in German").
+
+Your role is to:
+- Ask clarifying questions when scope is unclear.
+- Surface edge cases the user hasn't thought about.
+- Propose concrete phrasings when asked.
+
+When you propose a complete draft of the Intent, wrap it in a fenced block:
+
+\`\`\`markdown
+...
+\`\`\`
+
+Only use that fence for full-document drafts the user can click "Apply". For partial suggestions, comments, or questions, write prose without the fence.`,
+};
+
+export async function getAIChatResponse(
+  config: AIConfig,
+  request: AIChatRequest,
+): Promise<AIChatResponse> {
+  const systemPrompt = CHAT_SYSTEM_PROMPTS[request.target.kind];
+
+  // Build a grounding preamble so the model sees the current document and
+  // any authorization context. This is injected as the first user turn so
+  // it survives message-history truncation by the provider.
+  const groundingParts: string[] = [];
+  if (request.target.kind === 'intent') {
+    if (request.target.profileId) groundingParts.push(`Profile: ${request.target.profileId}`);
+    if (request.target.path) groundingParts.push(`Path: ${request.target.path}`);
+    if (request.target.bounds) groundingParts.push(`Bounds: ${request.target.bounds}`);
+  }
+  groundingParts.push(
+    request.currentText.trim()
+      ? `Current draft:\n"""\n${request.currentText}\n"""`
+      : 'Current draft is empty.',
+  );
+  const grounding = groundingParts.join('\n');
+
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: grounding },
+    ...request.messages.map(m => ({ role: m.role, content: m.content })),
+  ];
+
+  try {
+    let reply: string;
+
+    if (config.provider === 'ollama') {
+      const response = await fetch(`${config.endpoint}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          stream: false,
+          options: { temperature: 0.3, num_predict: 600 },
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!response.ok) throw new Error(`Ollama: ${response.status}`);
+      const data = await response.json() as { message?: { content?: string } };
+      reply = data.message?.content?.trim() || 'No response generated.';
+    } else {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
+
+      const response = await fetch(`${config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          temperature: 0.3,
+          max_tokens: 600,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`AI provider: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+      reply = data.choices?.[0]?.message?.content?.trim() || 'No response generated.';
+    }
+
+    return { success: true, reply };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 export async function testAIConnectivity(config: AIConfig): Promise<{ ok: boolean; message: string }> {
   try {
     if (config.provider === 'ollama') {

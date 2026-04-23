@@ -9,10 +9,12 @@ import { Router, type Request, type Response } from 'express';
 import type { Vault } from '../lib/vault';
 import {
   getAIAssistance,
+  getAIChatResponse,
   testAIConnectivity,
   PROVIDER_PRESETS,
   type AIConfig,
   type AIAssistRequest,
+  type AIChatRequest,
 } from '../lib/ai-client';
 
 export function createAIRouter(vault: Vault): Router {
@@ -48,6 +50,31 @@ export function createAIRouter(vault: Vault): Router {
     }
 
     const result = await getAIAssistance(config, request);
+    res.json(result);
+  });
+
+  /**
+   * POST /ai/chat — multi-turn refinement of context.md or a per-auth intent.
+   * Body: { target, currentText, messages }
+   */
+  router.post('/chat', async (req: Request, res: Response) => {
+    const config = loadAIConfig();
+    if (!config) {
+      res.status(400).json({ error: 'AI not configured. Save AI settings in Settings.' });
+      return;
+    }
+
+    const request = req.body as AIChatRequest;
+    if (!request.target || !request.target.kind) {
+      res.status(400).json({ error: 'Missing target.kind (context | intent)' });
+      return;
+    }
+    if (!Array.isArray(request.messages)) {
+      res.status(400).json({ error: 'Missing messages array' });
+      return;
+    }
+
+    const result = await getAIChatResponse(config, request);
     res.json(result);
   });
 

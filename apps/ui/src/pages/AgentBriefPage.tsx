@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { spClient } from '../lib/sp-client';
+import { AIChatPanel } from '../components/AIChatPanel';
 
 // Plain-spoken default brief for first-time users. Covers what HAP is,
 // how to behave under bounded authority, when to pull intent details on
@@ -170,6 +171,18 @@ export function AgentBriefPage() {
             Insert starter template
           </button>
         </div>
+      </div>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <AIChatPanel
+          target={{ kind: 'context' }}
+          currentText={context}
+          onApply={(text) => {
+            if (context.trim() && !confirm('Replace the current context with the applied draft?')) return;
+            setContext(text);
+          }}
+          title="Refine with AI — context.md"
+        />
       </div>
 
       <div className="card">

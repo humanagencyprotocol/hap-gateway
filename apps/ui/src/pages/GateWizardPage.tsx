@@ -4,6 +4,7 @@ import { spClient } from '../lib/sp-client';
 import { StepIndicator } from '../components/StepIndicator';
 import { ContextStrip } from '../components/ContextStrip';
 import { BoundsEditor } from '../components/BoundsEditor';
+import { AIChatPanel } from '../components/AIChatPanel';
 import type { AgentProfile, AgentBoundsParams, AgentContextParams } from '@hap/core';
 
 interface AuthData {
@@ -25,9 +26,6 @@ export function GateWizardPage() {
   const [intent, setIntent] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // AI assist state
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiResponse, setAiResponse] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = sessionStorage.getItem('agentAuth');
@@ -108,30 +106,6 @@ export function GateWizardPage() {
     navigate('/agent/review');
   };
 
-  const handleAskAI = async () => {
-    setAiLoading(true);
-    setAiResponse(null);
-    try {
-      const result = await spClient.aiAssist({
-        gate: 'intent',
-        currentText: intent,
-        context: authData ? {
-          profileId: authData.profileId,
-          bounds: boundsString || undefined,
-        } : undefined,
-      });
-      if (result.success && result.suggestion) {
-        setAiResponse(result.suggestion);
-      } else {
-        setAiResponse(result.error || 'AI could not generate a response.');
-      }
-    } catch (err) {
-      setAiResponse(err instanceof Error ? err.message : 'AI request failed');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
   if (loading || !authData || !profile) {
     return <p style={{ color: 'var(--text-tertiary)' }}>Loading...</p>;
   }
@@ -186,41 +160,28 @@ export function GateWizardPage() {
             {intent.length} / 2000
           </div>
 
-          {/* AI Assist */}
+          {/* AI chat — multi-turn refinement of this auth's Intent. */}
           <div style={{ marginTop: '0.75rem' }}>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={handleAskAI}
-              disabled={aiLoading}
-              style={{ fontSize: '0.8rem' }}
-            >
-              {aiLoading ? 'Thinking...' : 'Ask AI'}
-            </button>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginLeft: '0.5rem' }}>
+            <AIChatPanel
+              target={{
+                kind: 'intent',
+                profileId: authData.profileId,
+                bounds: boundsString || undefined,
+              }}
+              currentText={intent}
+              onApply={(text) => {
+                if (intent.trim() && !confirm('Replace the current intent with the applied draft?')) return;
+                setIntent(text);
+              }}
+              title="Refine with AI — intent"
+            />
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '0.25rem' }}>
               Advisory only — AI surfaces reality, you supply intent.
-            </span>
+            </div>
           </div>
 
-          {aiResponse && (
-            <div style={{
-              marginTop: '0.75rem',
-              padding: '0.75rem',
-              background: 'var(--bg-main)',
-              border: '1px solid var(--border)',
-              borderRadius: '0.5rem',
-              fontSize: '0.85rem',
-              lineHeight: 1.6,
-              whiteSpace: 'pre-wrap',
-            }}>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                AI Advisory
-              </div>
-              {aiResponse}
-            </div>
-          )}
-
           <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-            <button className="btn btn-ghost" onClick={() => { setStep(2); setAiResponse(null); }}>Back</button>
+            <button className="btn btn-ghost" onClick={() => setStep(2)}>Back</button>
             <button
               className="btn btn-primary"
               style={{ flex: 1 }}
