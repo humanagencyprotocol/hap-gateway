@@ -1,0 +1,8 @@
+# The gateway's integration-manager writes package.json + package-lock.json
+# and installs node_modules here when HAP_INTEGRATIONS_DIR resolves to this
+# directory. Those are runtime artifacts of the install target (usually
+# ~/.hap/integrations/), not source — keep them out of the repo if they ever
+# leak in again.
+package.json
+package-lock.json
+node_modules/

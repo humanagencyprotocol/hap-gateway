@@ -69,7 +69,12 @@ ENV HAP_DATA_DIR=/app/data
 ENV HAP_CP_PORT=3000
 ENV HAP_MCP_PORT=3030
 ENV HAP_MCP_INTERNAL_URL=http://127.0.0.1:3030
-ENV HAP_INTEGRATIONS_DIR=/app/content/integrations
+# Manifest source (read-only) and runtime install target (writable) are
+# intentionally separate. Pointing the runtime installer at the manifest dir
+# polluted the image with a writable node_modules tree inside read-only
+# sources.
+ENV HAP_MANIFESTS_DIR=/app/content/integrations
+ENV HAP_INTEGRATIONS_DIR=/app/integrations
 ENV HAP_PROFILES_DIR=/hap-profiles
 ENV NODE_ENV=production
 

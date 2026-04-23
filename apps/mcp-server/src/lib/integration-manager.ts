@@ -15,11 +15,21 @@ import type { ProfileToolGating } from '@hap/core';
 import type { IntegrationConfig, ToolGatingConfig } from './integration-registry';
 
 const DEFAULT_DATA_DIR = process.env.HAP_DATA_DIR ?? `${process.env.HOME}/.hap`;
+// Runtime INSTALL directory for downstream MCP npm packages (e.g. crm-mcp,
+// records-mcp). We write package.json here and run `npm install` to land
+// node_modules/.
+//
+// Must NOT be pointed at the checked-in manifest source dir
+// (content/integrations/) — doing so leaks package.json, package-lock.json,
+// and ~53 MB of node_modules/ straight into the repo. The two concerns used
+// to share one env var; now manifest-loader uses HAP_MANIFESTS_DIR and this
+// module owns HAP_INTEGRATIONS_DIR exclusively.
+//
 // Integration node_modules (native binaries like better-sqlite3) are arch-
 // specific. In docker, HAP_INTEGRATIONS_DIR should point outside the mounted
 // host volume so a macOS ↔ Linux host never sees the other's .node files.
-// Defaults to DEFAULT_DATA_DIR/integrations for local dev, which is fine
-// because the host arch never changes.
+// Defaults to DEFAULT_DATA_DIR/integrations (~/.hap/integrations) for local
+// dev, which is fine because the host arch never changes.
 const INTEGRATIONS_DIR = process.env.HAP_INTEGRATIONS_DIR ?? join(DEFAULT_DATA_DIR, 'integrations');
 const INTEGRATIONS_BIN = join(INTEGRATIONS_DIR, 'node_modules', '.bin');
 
