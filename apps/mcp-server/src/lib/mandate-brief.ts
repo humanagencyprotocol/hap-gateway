@@ -2,8 +2,10 @@
  * Mandate Brief — renders enriched authorizations into a compact text brief
  * that is set as MCP `instructions` so the agent understands its mandate.
  *
- * Tier 1 of the two-tier context model: always loaded, kept compact (~15 lines).
- * Full detail is loaded on demand via list-authorizations (Tier 2).
+ * Tier 1 of the two-tier context model: always loaded, one line per authority.
+ * Intents, full bounds docs, and per-tool detail are Tier 2 — pulled on demand
+ * via list-authorizations(domain). A user with 30 authorizations otherwise
+ * pays ~15K tokens of Intent paragraphs on every session start.
  */
 
 import type { EnrichedAuthorization } from './shared-state';
@@ -90,36 +92,36 @@ export function buildMandateBrief(opts: MandateBriefOptions): string {
       const earliestExpiry = Math.min(...auth.attestations.map(a => a.expiresAt));
       const remainingMin = Math.max(0, Math.round((earliestExpiry - now) / 60));
 
+      const shortName = shortProfileName(auth.profileId);
+      const version = auth.profileId.match(/@(.+)$/)?.[1] ?? '';
+      const shortId = version ? `${shortName}@${version}` : shortName;
+
       const boundsDesc = Object.entries(auth.frame)
         .filter(([key]) => key !== 'profile' && key !== 'path')
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ');
+        .map(([key, value]) => `${key}:${value}`)
+        .join(' · ');
 
-      lines.push(`[${auth.path}] ${auth.profileId} (${remainingMin} min remaining)`);
-      lines.push(`  Bounds: ${boundsDesc}`);
+      // One compact line per authority: bounds · usage · tool count · expiry.
+      // Intents are intentionally NOT inlined here — they stay pull-on-demand
+      // via list-authorizations(domain) so a user with 30 authorizations
+      // doesn't pay ~15K tokens of paragraphs on every session start.
+      const parts: string[] = [];
+      if (boundsDesc) parts.push(boundsDesc);
 
-      // Consumption summary (compact)
       if (executionLog) {
-        const shortName = shortProfileName(auth.profileId);
         const profile = getProfile(auth.profileId) ?? getProfile(shortName);
         const consumption = getConsumptionState(auth, executionLog, profile);
         const compact = formatConsumptionCompact(consumption);
-        if (compact) {
-          lines.push(`  Usage: ${compact}`);
-        }
+        if (compact) parts.push(compact);
       }
 
-      if (auth.gateContent?.intent) {
-        lines.push(`  Intent: ${auth.gateContent.intent}`);
-      }
-
-      // Tool counts
       const { gated, readOnly } = countToolsByGating(auth.profileId, integrationManager);
-      if (gated > 0 || readOnly > 0) {
-        const shortName = shortProfileName(auth.profileId);
-        lines.push(`  ${gated} gated tools, ${readOnly} read-only — call list-authorizations(domain: "${shortName}") for details`);
-      }
+      if (gated > 0 || readOnly > 0) parts.push(`${gated} gated tools`);
 
+      parts.push(`${remainingMin} min remaining`);
+
+      lines.push(`[${shortId}] ${parts.join(' · ')}`);
+      lines.push(`  → list-authorizations(domain: "${shortName}") for intent & details`);
       lines.push('');
     }
   }

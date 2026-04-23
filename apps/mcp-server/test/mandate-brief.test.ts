@@ -44,14 +44,23 @@ describe('buildMandateBrief', () => {
     expect(brief).toContain('bounded authorities');
   });
 
-  it('includes active authority with bounds and gate content', () => {
+  it('includes active authority as a compact one-line summary', () => {
     const brief = buildMandateBrief({ authorizations: [mockAuth()] });
     expect(brief).toContain('=== ACTIVE AUTHORITIES ===');
-    expect(brief).toContain('[charge-routine]');
-    expect(brief).toContain('charge@0.3');
-    expect(brief).toContain('Bounds:');
-    expect(brief).toContain('amount_max: 100');
-    expect(brief).toContain('Intent: Enable automated purchasing');
+    // New shape: [shortName@version] bound:val · ... · N min remaining
+    expect(brief).toContain('[charge@0.3]');
+    expect(brief).toContain('amount_max:100');
+    expect(brief).toContain('min remaining');
+    // Pointer to on-demand details
+    expect(brief).toContain('list-authorizations(domain: "charge")');
+  });
+
+  it('does NOT inline the Intent paragraph — intent is pull-on-demand', () => {
+    // Regression guard for the Phase 1 trim: intents stay out of the session
+    // brief to keep prelude token cost constant as authorizations grow.
+    const brief = buildMandateBrief({ authorizations: [mockAuth()] });
+    expect(brief).not.toContain('Enable automated purchasing');
+    expect(brief).not.toMatch(/Intent:\s/);
   });
 
   it('includes pending authorities with missing domains', () => {
