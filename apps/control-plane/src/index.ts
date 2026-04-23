@@ -232,6 +232,139 @@ app.use('/ai', jsonParser, authGuard, createAIRouter(vault));
 // MCP integration management routes
 app.use('/mcp', jsonParser, authGuard, createMCPRouter());
 
+/**
+ * GET /integrations/:id/discover/:field — wizard-only resource discovery.
+ *
+ * Looks up the integration manifest's contextDiscovery[field] config, resolves
+ * the integration's OAuth credentials from the vault, optionally exchanges a
+ * refresh_token for an access_token, fetches the target service's endpoint,
+ * and returns a normalized option list for the gate wizard to render as a
+ * multi-select.
+ *
+ * Auth: session-authenticated (gateway owner). NOT agent-reachable — this is
+ * a pre-auth helper for the wizard, not a gated tool.
+ */
+app.get('/integrations/:id/discover/:field', authGuard, async (req: Request, res: Response) => {
+  const integrationId = req.params.id;
+  const fieldName = req.params.field;
+  try {
+    // Locate manifest + discovery config
+    const manifestsResp = (await getManifests()) as { manifests: Array<Record<string, unknown>> };
+    const manifest = manifestsResp.manifests.find(m => m.id === integrationId);
+    if (!manifest) {
+      res.status(404).json({ error: `Unknown integration "${integrationId}"` });
+      return;
+    }
+    const discovery = (manifest.contextDiscovery as Record<string, {
+      baseUrl: string;
+      endpoint: string;
+      auth: 'bearer';
+      credential?: string;
+      responsePath: string;
+      valueField: string;
+      labelField: string;
+      extraFields?: Record<string, string>;
+    }> | undefined)?.[fieldName];
+    if (!discovery) {
+      res.status(404).json({ error: `No contextDiscovery declared for field "${fieldName}" on integration "${integrationId}"` });
+      return;
+    }
+
+    // Resolve credentials from the vault
+    const creds = vault.getCredential(integrationId);
+    if (!creds) {
+      res.status(400).json({ error: `Integration "${integrationId}" has no credentials in the vault — complete OAuth first.` });
+      return;
+    }
+    const oauth = manifest.oauth as {
+      tokenUrl: string;
+      credentialKeys: Record<string, string>;
+      tokenStorage: string;
+    } | null;
+    const credField = discovery.credential ?? oauth?.tokenStorage;
+    const storedToken = credField ? creds[credField] : undefined;
+    if (!storedToken) {
+      res.status(400).json({ error: `Credential field "${credField}" not set on vault entry for "${integrationId}"` });
+      return;
+    }
+
+    // Exchange refresh_token → access_token if this looks like a Google-style OAuth refresh flow.
+    // Heuristic: if the manifest's tokenStorage matches credField and oauth is configured, assume
+    // refresh and exchange. Callers that already hold a direct bearer can skip by declaring a
+    // non-refresh credential field in contextDiscovery.credential.
+    let accessToken = storedToken;
+    if (oauth && credField === oauth.tokenStorage && oauth.tokenUrl) {
+      const clientIdKey = oauth.credentialKeys?.clientId ?? 'clientId';
+      const clientSecretKey = oauth.credentialKeys?.clientSecret ?? 'clientSecret';
+      const tokRes = await fetch(oauth.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: creds[clientIdKey] ?? '',
+          client_secret: creds[clientSecretKey] ?? '',
+          refresh_token: storedToken,
+          grant_type: 'refresh_token',
+        }),
+      });
+      if (!tokRes.ok) {
+        const body = await tokRes.text();
+        res.status(502).json({ error: `OAuth refresh failed (${tokRes.status}): ${body}` });
+        return;
+      }
+      const data = (await tokRes.json()) as { access_token?: string; error?: string };
+      if (!data.access_token) {
+        res.status(502).json({ error: `OAuth refresh returned no access_token: ${data.error ?? 'unknown'}` });
+        return;
+      }
+      accessToken = data.access_token;
+    }
+
+    // Call the service endpoint
+    const url = `${discovery.baseUrl.replace(/\/$/, '')}/${discovery.endpoint.replace(/^\//, '')}`;
+    const apiRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!apiRes.ok) {
+      const body = await apiRes.text();
+      res.status(502).json({ error: `Discovery call failed (${apiRes.status}): ${body.slice(0, 500)}` });
+      return;
+    }
+    const payload = (await apiRes.json()) as unknown;
+
+    // Extract array at responsePath (simple dotted path)
+    let list: unknown = payload;
+    for (const segment of discovery.responsePath.split('.').filter(Boolean)) {
+      if (list && typeof list === 'object' && segment in (list as Record<string, unknown>)) {
+        list = (list as Record<string, unknown>)[segment];
+      } else {
+        list = undefined;
+        break;
+      }
+    }
+    if (!Array.isArray(list)) {
+      res.status(502).json({ error: `Discovery response did not contain an array at path "${discovery.responsePath}"` });
+      return;
+    }
+
+    // Normalize items
+    const options = list.map((raw) => {
+      const item = raw as Record<string, unknown>;
+      const extras: Record<string, unknown> = {};
+      for (const [outKey, inKey] of Object.entries(discovery.extraFields ?? {})) {
+        extras[outKey] = item[inKey];
+      }
+      return {
+        value: item[discovery.valueField],
+        label: item[discovery.labelField],
+        ...(Object.keys(extras).length > 0 ? { extras } : {}),
+      };
+    });
+
+    res.json({ options });
+  } catch (err) {
+    console.error(`[Control Plane] discover ${integrationId}/${fieldName} failed:`, err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Discovery failed' });
+  }
+});
+
 // Gate content retrieval — protected
 app.get('/gate-content', authGuard, async (req: Request, res: Response) => {
   try {

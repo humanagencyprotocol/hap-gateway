@@ -112,6 +112,17 @@ export interface IntegrationManifest {
   templates?: AuthTemplate[];
   setupHint?: string;
   setupGuide?: Array<{ title: string; description: string; link?: string }>;
+  /** Declares which context-scope fields can be discovered from the target service (wizard-only). */
+  contextDiscovery?: Record<string, {
+    baseUrl: string;
+    endpoint: string;
+    auth: 'bearer';
+    credential?: string;
+    responsePath: string;
+    valueField: string;
+    labelField: string;
+    extraFields?: Record<string, string>;
+  }>;
 }
 
 export interface McpIntegrationStatus {
@@ -456,6 +467,25 @@ class SPClient {
   async getIntegrationManifests(): Promise<{ manifests: IntegrationManifest[] }> {
     const res = await this.fetch('/mcp/integrations/manifests');
     if (!res.ok) throw new Error(`Failed to fetch manifests: ${res.status}`);
+    return res.json();
+  }
+
+  /**
+   * Wizard-only scope-field discovery. Asks the control plane to fetch a
+   * context-field's valid values from the connected service (e.g., Google
+   * Calendar's calendarList). Returns normalized options for a multi-select.
+   * See doc/hap-scope-discovery-proposal.md.
+   */
+  async discoverScopeField(integrationId: string, field: string): Promise<{
+    options: Array<{ value: string; label: string; extras?: Record<string, unknown> }>;
+  }> {
+    const res = await this.fetch(
+      `/integrations/${encodeURIComponent(integrationId)}/discover/${encodeURIComponent(field)}`,
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `Discovery failed: ${res.status}` }));
+      throw new Error((err as { error: string }).error);
+    }
     return res.json();
   }
 

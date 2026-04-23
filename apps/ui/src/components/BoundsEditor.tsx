@@ -1,5 +1,7 @@
-import { useState, useRef, type KeyboardEvent, type ClipboardEvent } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent, type ClipboardEvent } from 'react';
 import type { AgentProfile, AgentBoundsParams, AgentContextParams, AgentFrameParams, ProfileBoundsField, ProfileContextField } from '@hap/core';
+import { DiscoveredScopeField } from './DiscoveredScopeField';
+import { spClient, type IntegrationManifest } from '../lib/sp-client';
 
 interface Props {
   profile: AgentProfile;
@@ -8,6 +10,16 @@ interface Props {
   initialBounds?: AgentBoundsParams;
   initialContext?: AgentContextParams;
   initialFrame?: AgentFrameParams;
+}
+
+/**
+ * Extract the short profile name from a fully-qualified profile id.
+ *   github.com/humanagencyprotocol/hap-profiles/calendar@0.4  →  calendar
+ * Integration manifests declare `profile` using the short name.
+ */
+function shortProfileName(profileId: string): string {
+  const withoutVersion = profileId.replace(/@.*$/, '');
+  return withoutVersion.split('/').pop() ?? profileId;
 }
 
 type FieldDef = ProfileBoundsField | ProfileContextField;
@@ -256,6 +268,7 @@ function FieldRow({
   prefix,
   readOnly,
   twoColumn,
+  discoveryIntegrationId,
 }: {
   fieldKey: string;
   fieldDef: FieldDef;
@@ -264,6 +277,9 @@ function FieldRow({
   prefix: string;
   readOnly?: boolean;
   twoColumn?: boolean;
+  /** When present AND prefix === 'context', this field uses live discovery
+   * from the named integration. Overrides the plain-text-input fallback. */
+  discoveryIntegrationId?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const label = humanizeFieldName(fieldKey, fieldDef);
@@ -322,6 +338,14 @@ function FieldRow({
           onChange={v => onChange(fieldKey, v)}
           disabled={readOnly}
           format={fieldDef.format as 'email' | 'domain'}
+        />
+      ) : discoveryIntegrationId ? (
+        <DiscoveredScopeField
+          integrationId={discoveryIntegrationId}
+          field={fieldKey}
+          value={value}
+          onChange={v => onChange(fieldKey, v)}
+          disabled={readOnly}
         />
       ) : (
         <input
@@ -416,6 +440,23 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
   const [boundsValues, setBoundsValues] = useState<Record<string, string>>(initialBoundsValues);
   const [contextValues, setContextValues] = useState<Record<string, string>>(initialContextValues);
 
+  // Find the integration manifest (if any) whose `profile` matches the profile
+  // being authorized AND which declares contextDiscovery for one or more of
+  // this profile's context fields. The wizard uses this to render live-fetched
+  // option lists for those fields (e.g. Google calendar IDs).
+  const [discoveryIntegration, setDiscoveryIntegration] = useState<IntegrationManifest | null>(null);
+  useEffect(() => {
+    const shortName = shortProfileName(profile.id);
+    spClient.getIntegrationManifests()
+      .then(({ manifests }) => {
+        const match = manifests.find(
+          m => m.profile === shortName && m.contextDiscovery && Object.keys(m.contextDiscovery).length > 0,
+        );
+        setDiscoveryIntegration(match ?? null);
+      })
+      .catch(() => setDiscoveryIntegration(null));
+  }, [profile.id]);
+
   const handleBoundsChange = (key: string, value: string) => {
     setBoundsValues(prev => ({ ...prev, [key]: value }));
   };
@@ -461,17 +502,21 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
               <div className="bounds-section-subtitle">Encrypted on your device, never sent to the SP</div>
             </div>
           </div>
-          {contextFields.map(([key, fieldDef]) => (
-            <FieldRow
-              key={`context-${key}`}
-              fieldKey={key}
-              fieldDef={fieldDef}
-              value={contextValues[key]}
-              onChange={handleContextChange}
-              prefix="context"
-              readOnly={readOnly}
-            />
-          ))}
+          {contextFields.map(([key, fieldDef]) => {
+            const hasDiscovery = !!discoveryIntegration?.contextDiscovery?.[key];
+            return (
+              <FieldRow
+                key={`context-${key}`}
+                fieldKey={key}
+                fieldDef={fieldDef}
+                value={contextValues[key]}
+                onChange={handleContextChange}
+                prefix="context"
+                readOnly={readOnly}
+                discoveryIntegrationId={hasDiscovery ? discoveryIntegration!.id : undefined}
+              />
+            );
+          })}
         </div>
       )}
 

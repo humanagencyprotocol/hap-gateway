@@ -31,6 +31,29 @@ export interface ManifestOAuthConfig {
   extraParams?: Record<string, string>;
 }
 
+/**
+ * Declares how to discover valid values for a context-scope field by
+ * querying the connected service. Consumed by the wizard-only endpoint
+ * GET /integrations/:id/discover/:field on the control plane — not
+ * agent-reachable. See doc/hap-scope-discovery-proposal.md.
+ */
+export interface ManifestContextDiscovery {
+  baseUrl: string;
+  endpoint: string;
+  /** Currently only "bearer" is supported — token from the integration's vault credential. */
+  auth: 'bearer';
+  /** Vault credential field holding the bearer (or refresh token to exchange). Defaults to oauth.tokenStorage. */
+  credential?: string;
+  /** Dotted path to the array in the response (e.g. "items"). */
+  responsePath: string;
+  /** Key on each array element for the option value. */
+  valueField: string;
+  /** Key for the human-readable label. */
+  labelField: string;
+  /** Optional extras surfaced to the wizard UI for each option (e.g. access role, timezone). */
+  extraFields?: Record<string, string>;
+}
+
 export interface IntegrationManifest {
   id: string;
   name: string;
@@ -52,6 +75,8 @@ export interface IntegrationManifest {
   personalDefault?: boolean;
   toolGating: ProfileToolGating;
   setupHint?: string;
+  /** Optional per-context-field discovery config (wizard-only). */
+  contextDiscovery?: Record<string, ManifestContextDiscovery>;
 }
 
 interface ManifestIndex {

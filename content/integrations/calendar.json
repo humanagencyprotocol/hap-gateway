@@ -32,6 +32,22 @@
     "tokenStorage": "refreshToken",
     "extraParams": { "access_type": "offline", "prompt": "consent" }
   },
+  "contextDiscovery": {
+    "allowed_calendars": {
+      "baseUrl": "https://www.googleapis.com/calendar/v3",
+      "endpoint": "users/me/calendarList",
+      "auth": "bearer",
+      "credential": "refreshToken",
+      "responsePath": "items",
+      "valueField": "id",
+      "labelField": "summary",
+      "extraFields": {
+        "access": "accessRole",
+        "timeZone": "timeZone",
+        "primary": "primary"
+      }
+    }
+  },
   "toolGating": {
     "default": {
       "executionMapping": {},
