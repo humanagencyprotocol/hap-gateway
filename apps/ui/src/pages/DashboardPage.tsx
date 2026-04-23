@@ -53,8 +53,8 @@ export function DashboardPage() {
 
   for (const p of pendingProposals) {
     attentionItems.push({
-      label: 'Review pending',
-      detail: `${p.tool} awaiting your review`,
+      label: 'Approval pending',
+      detail: `${p.tool} awaiting your approval`,
       to: '/proposals',
       color: 'var(--warning)',
     });
@@ -148,7 +148,7 @@ export function DashboardPage() {
             <div style={{ fontSize: '1.5rem', fontWeight: 700, color: pendingProposals.length > 0 ? 'var(--warning)' : 'var(--text-tertiary)' }}>
               {pendingProposals.length}
             </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Pending Reviews</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Pending Approvals</div>
           </div>
         </Link>
         <Link to="/authorizations" style={{ textDecoration: 'none' }}>

@@ -5,6 +5,15 @@ import { computeBoundsHashBrowser, computeContextHashBrowser, hashGateContent } 
 import { profileDisplayName } from '../lib/profile-display';
 import type { AgentProfile } from '@hap/core';
 
+function formatRemaining(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  if (d >= 1) return `${d} day${d === 1 ? '' : 's'}`;
+  const h = Math.floor(seconds / 3600);
+  if (h >= 1) return `${h} hour${h === 1 ? '' : 's'}`;
+  const m = Math.ceil(seconds / 60);
+  return `${m} minute${m === 1 ? '' : 's'}`;
+}
+
 const TTL_OPTIONS = [
   { label: '30m', seconds: 1800 },
   { label: '1h', seconds: 3600 },
@@ -12,6 +21,9 @@ const TTL_OPTIONS = [
   { label: '4h', seconds: 14400 },
   { label: '8h', seconds: 28800 },
   { label: '24h', seconds: 86400 },
+  { label: '7d', seconds: 604800 },
+  { label: '30d', seconds: 2592000 },
+  { label: '1y', seconds: 31536000 },
 ];
 
 interface Props {
@@ -22,7 +34,17 @@ interface Props {
 
 export function ExtendAuthModal({ item, onClose, onSuccess }: Props) {
   const { user, activeDomain, groupId } = useAuth();
-  const [selectedTTL, setSelectedTTL] = useState(1800);
+
+  // Filter out durations that would SHORTEN the authorization. Extending to
+  // less than the remaining TTL is nonsense — the attestation's existing TTL
+  // is already longer. Keep options strictly greater than remaining.
+  const remaining = item.remaining_seconds ?? 0;
+  const usableOptions = TTL_OPTIONS.filter(o => o.seconds > remaining);
+
+  // Default selection: smallest usable option (nearest useful bump), or 30d if
+  // the list is empty because the auth is already on a multi-year TTL.
+  const defaultTTL = usableOptions[0]?.seconds ?? 2592000;
+  const [selectedTTL, setSelectedTTL] = useState(defaultTTL);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,8 +57,12 @@ export function ExtendAuthModal({ item, onClose, onSuccess }: Props) {
     setError('');
 
     try {
-      // 1. Fetch gate content from MCP
-      const gateEntry: GateContentEntry | null = await spClient.getGateContent(item.path);
+      // 1. Fetch gate content from MCP. The gate store keys under (in priority):
+      //    frame_hash / profile_id / path — v0.4 attestations have no `path`
+      //    so passing item.path alone returns null (which is what caused the
+      //    "Gate content not found locally" error users hit on extend).
+      const lookupKey = item.frame_hash || item.profile_id || item.path;
+      const gateEntry: GateContentEntry | null = await spClient.getGateContent(lookupKey);
       if (!gateEntry) {
         throw new Error('Gate content not found locally. The MCP server may have restarted. Please re-authorize through the full wizard instead.');
       }
@@ -126,24 +152,35 @@ export function ExtendAuthModal({ item, onClose, onSuccess }: Props) {
 
           <div style={{ marginBottom: '1rem' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
-              Duration
+              New duration
             </div>
+            {remaining > 0 && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
+                Currently valid for {formatRemaining(remaining)}. Only longer durations are shown.
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {TTL_OPTIONS.map(opt => (
-                <button
-                  key={opt.seconds}
-                  className={`btn ${selectedTTL === opt.seconds ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setSelectedTTL(opt.seconds)}
-                  style={{ minWidth: '3.5rem' }}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {usableOptions.length === 0 ? (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
+                  This authorization is already on the longest available duration. Nothing to extend.
+                </div>
+              ) : (
+                usableOptions.map(opt => (
+                  <button
+                    key={opt.seconds}
+                    className={`btn ${selectedTTL === opt.seconds ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setSelectedTTL(opt.seconds)}
+                    style={{ minWidth: '3.5rem' }}
+                  >
+                    {opt.label}
+                  </button>
+                ))
+              )}
             </div>
           </div>
 
           <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
-            Same bounds, context, and gate content will be re-attested with a new TTL.
+            Same bounds, context, and gate content will be re-attested with a new TTL (measured from now).
           </div>
 
           {error && <div className="error-message">{error}</div>}

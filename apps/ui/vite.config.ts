@@ -38,6 +38,10 @@ export default defineConfig({
         target: 'http://localhost:3402',
         changeOrigin: true,
       },
+      '/integrations': {
+        target: 'http://localhost:3402',
+        changeOrigin: true,
+      },
     },
   },
 });

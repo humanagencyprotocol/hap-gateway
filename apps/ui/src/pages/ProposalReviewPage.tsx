@@ -73,9 +73,9 @@ export function ProposalReviewPage() {
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Action Thread</h1>
+        <h1 className="page-title">Pending Approvals</h1>
         <p className="page-subtitle">
-          Agent actions — pending reviews and recent activity from the last 7 days.
+          Agent actions awaiting your approval, plus recent activity from the last 7 days.
         </p>
       </div>
 
@@ -131,7 +131,7 @@ export function ProposalReviewPage() {
       ) : items.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
           <p style={{ color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
-            {statusFilter === 'pending' ? 'No actions awaiting your review.' : 'Nothing here yet.'}
+            {statusFilter === 'pending' ? 'No actions awaiting your approval.' : 'Nothing here yet.'}
           </p>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
             {statusFilter === 'pending'

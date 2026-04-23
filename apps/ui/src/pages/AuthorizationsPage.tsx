@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { spClient, type PendingItem, type GateContentEntry } from '../lib/sp-client';
 import { profileDisplayName } from '../lib/profile-display';
 import { AuthorizePicker } from '../components/AuthorizePicker';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { DomainBadge } from '../components/DomainBadge';
 import { TTLBadge } from '../components/TTLBadge';
@@ -54,6 +55,10 @@ export function AuthorizationsPage() {
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [revokedSet, setRevokedSet] = useState<Set<string>>(new Set());
   const [revokingHash, setRevokingHash] = useState<string | null>(null);
+  const [copyingHash, setCopyingHash] = useState<string | null>(null);
+
+  const navigate = useNavigate();
+  const { group, groupId, domain: activeDomain } = useAuth();
 
   const fetchItems = useCallback(() => {
     setLoading(true);
@@ -94,6 +99,52 @@ export function AuthorizationsPage() {
       setCopiedHash(hash);
       setTimeout(() => setCopiedHash(null), 2000);
     });
+  };
+
+  const handleCopy = async (item: PendingItem) => {
+    if (!groupId) {
+      alert('No active group; cannot copy authorization.');
+      return;
+    }
+    setCopyingHash(item.frame_hash);
+    try {
+      // Fetch gate content (or reuse cached). Same lookup fallback the
+      // expand/extend paths use — v0.4 auths have no path, so the cache key
+      // is frame_hash (most specific) falling back to profile_id.
+      const lookupKey = item.frame_hash || item.profile_id || item.path;
+      let entry: GateContentEntry | null = gateCache[lookupKey] ?? null;
+      if (!(lookupKey in gateCache)) {
+        entry = await spClient.getGateContent(lookupKey);
+        setGateCache(prev => ({ ...prev, [lookupKey]: entry }));
+      }
+
+      const bounds = Object.fromEntries(
+        Object.entries(item.frame).filter(([k]) => k !== 'profile' && k !== 'path')
+      );
+      const context = entry?.context ?? {};
+      const intent = entry?.gateContent?.intent ?? '';
+      const templateMode: 'automatic' | 'review' =
+        item.deferred_commitment_domains.length > 0 ? 'review' : 'automatic';
+      const domainForAuth = item.attested_domains[0] || activeDomain || 'owner';
+
+      sessionStorage.setItem('agentAuth', JSON.stringify({
+        profileId: item.profile_id,
+        groupId,
+        groupName: group?.name ?? null,
+        domain: domainForAuth,
+      }));
+      sessionStorage.setItem('agentGate', JSON.stringify({
+        bounds,
+        context,
+        gateContent: { intent },
+        templateMode,
+      }));
+      navigate('/agent/gate');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to copy authorization');
+    } finally {
+      setCopyingHash(null);
+    }
   };
 
   const handleRevoke = async (frameHash: string) => {
@@ -146,8 +197,11 @@ export function AuthorizationsPage() {
     revokedSet,
   );
 
-  // Track which paths have been seen to only show Extend on most recent per path
-  const seenPaths = new Set<string>();
+  // Used to be: "only show Extend on the most recent auth per path" — confusing
+  // for users who couldn't tell which row was the most recent. Dropped. Extend
+  // now surfaces on every active/pending/expired row; extending an older duplicate
+  // simply re-attests its bounds/context/gate-content with a fresh TTL, same as
+  // extending the latest — no footgun.
 
   return (
     <>
@@ -286,10 +340,12 @@ export function AuthorizationsPage() {
           {filtered.map(item => {
             const status = getStatus(item, revokedSet);
             const isExpanded = expandedHash === item.frame_hash;
-            const gateEntry = gateCache[item.path];
-            const isFirstForPath = !seenPaths.has(item.path);
-            seenPaths.add(item.path);
-            const showExtend = isFirstForPath && (status === 'expired' || isExpanded);
+            // Must match the key used in handleExpand — v0.4 auths have no
+            // `path` so we fall back to profile_id. Keeping these two lookup
+            // expressions in sync is load-bearing; a mismatch renders "Gate
+            // content not available" because the cached entry can't be found.
+            const gateEntry = gateCache[item.frame_hash || item.profile_id || item.path];
+            const showExtend = status === 'active' || status === 'pending' || status === 'expired';
             const boundsEntries = Object.entries(item.frame)
               .filter(([k]) => k !== 'profile' && k !== 'path');
 
@@ -347,31 +403,16 @@ export function AuthorizationsPage() {
                   </div>
                 )}
 
-                {/* Action row */}
+                {/* Preview action row — only the Details toggle. Copy / Extend /
+                    Revoke live in the expanded view so the collapsed card stays
+                    a scannable summary. */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={() => handleExpand(item)}
                   >
-                    {isExpanded ? '\u25B2 Collapse' : '\u25BC Details'}
+                    {isExpanded ? '\u25B2 Hide Details' : '\u25BC Details'}
                   </button>
-                  {showExtend && !isExpanded && (
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setExtendItem(item)}
-                    >
-                      \u21BB Extend
-                    </button>
-                  )}
-                  {(status === 'active' || status === 'pending') && (
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleRevoke(item.frame_hash)}
-                      disabled={revokingHash === item.frame_hash}
-                    >
-                      {revokingHash === item.frame_hash ? 'Revoking\u2026' : 'Revoke'}
-                    </button>
-                  )}
                 </div>
 
                 {/* Expanded view */}
@@ -446,17 +487,19 @@ export function AuthorizationsPage() {
                     {/* Expanded action row */}
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
                       <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setExpandedHash(null)}
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleCopy(item)}
+                        disabled={copyingHash === item.frame_hash}
+                        title="Start a new authorization pre-filled with these bounds, context, and intent"
                       >
-                        \u25B2 Collapse
+                        {copyingHash === item.frame_hash ? 'Copying…' : '⧉ Copy'}
                       </button>
                       {showExtend && (
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={() => setExtendItem(item)}
                         >
-                          \u21BB Extend
+                          {'\u21BB Extend'}
                         </button>
                       )}
                       {(status === 'active' || status === 'pending') && (

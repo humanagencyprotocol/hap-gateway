@@ -139,7 +139,7 @@ export interface GateContentEntry {
   contextHash?: string;
   path: string;
   profileId: string;
-  gateContent: { problem: string; objective: string; tradeoffs: string };
+  gateContent: { intent: string };
   context?: Record<string, string | number>;
   storedAt: string;
 }
