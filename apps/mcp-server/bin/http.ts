@@ -25,6 +25,7 @@ import { IntegrationRegistry, type IntegrationConfig } from '../src/lib/integrat
 import { IntegrationManager } from '../src/lib/integration-manager';
 import { loadProfiles } from '../src/lib/profile-loader';
 import { loadManifests, getAllManifests, getManifest } from '../src/lib/manifest-loader';
+import { buildMandateBrief } from '../src/lib/mandate-brief';
 
 const spUrl = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
 const port = parseInt(process.env.HAP_MCP_PORT ?? '3430', 10);
@@ -463,6 +464,24 @@ app.get('/internal/gate-content', internalOnly, (req: Request, res: Response) =>
 
 app.get('/internal/manifests', internalOnly, (_req: Request, res: Response) => {
   res.json({ manifests: getAllManifests() });
+});
+
+// Agent Brief preview — returns the exact string the next MCP session will
+// receive as `instructions`. Used by the Agent Brief UI so the user sees how
+// their context.md edits reshape the session prelude byte-for-byte.
+app.get('/internal/brief', internalOnly, (_req: Request, res: Response) => {
+  try {
+    const enriched = state.getEnrichedAuthorizations();
+    const brief = buildMandateBrief({
+      authorizations: enriched,
+      executionLog: state.executionLog,
+      integrationManager,
+    });
+    res.json({ brief });
+  } catch (err) {
+    console.error('[HAP MCP] /internal/brief failed:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Brief preview failed' });
+  }
 });
 
 // ─── Integration startup helpers ────────────────────────────────────────────

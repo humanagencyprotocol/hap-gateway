@@ -19,7 +19,7 @@ import { createAuthRouter } from './routes/auth';
 import { createVaultRouter } from './routes/vault';
 import { createAIRouter } from './routes/ai';
 import { requireAuth } from './middleware/auth';
-import { pushGateContent, pushServiceCredentials, setInternalSecret, getManifests, getGateContent } from './lib/mcp-bridge';
+import { pushGateContent, pushServiceCredentials, setInternalSecret, getManifests, getGateContent, getBrief } from './lib/mcp-bridge';
 import { createMCPRouter } from './routes/mcp';
 import { startUpdateChecker, getUpdateStatus, forceCheck } from './lib/update-checker';
 
@@ -394,6 +394,71 @@ app.post('/gate-content', jsonParser, authGuard, async (req: Request, res: Respo
   } catch (err) {
     console.error('[Control Plane] Gate content forward error:', err);
     res.status(500).json({ error: 'Failed to forward gate content to MCP server' });
+  }
+});
+
+// ─── Agent Brief (context.md + session-brief preview) ───────────────────
+//
+// User-authored standing orders for MCP-connecting agents. Plaintext on
+// disk at $HAP_DATA_DIR/context.md (default ~/.hap/context.md) — see
+// context-loader.ts in the MCP server.
+//
+// GET  /agent-brief/context   → { content: string }
+// PUT  /agent-brief/context   (body: { content: string }) → { ok: true }
+// GET  /agent-brief/preview   → { brief: string }
+
+const AGENT_CONTEXT_MAX_BYTES = 16 * 1024; // 16 KB cap — plenty for standing orders.
+const HAP_DATA_DIR = process.env.HAP_DATA_DIR ?? `${process.env.HOME}/.hap`;
+
+app.get('/agent-brief/context', authGuard, async (_req: Request, res: Response) => {
+  try {
+    const { readFileSync, existsSync: fileExists } = await import('node:fs');
+    const filePath = join(HAP_DATA_DIR, 'context.md');
+    if (!fileExists(filePath)) {
+      res.json({ content: '' });
+      return;
+    }
+    const content = readFileSync(filePath, 'utf-8');
+    res.json({ content });
+  } catch (err) {
+    console.error('[Control Plane] agent-brief/context GET failed:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to read context' });
+  }
+});
+
+app.put('/agent-brief/context', jsonParser, authGuard, async (req: Request, res: Response) => {
+  try {
+    const { content } = req.body as { content?: unknown };
+    if (typeof content !== 'string') {
+      res.status(400).json({ error: 'Missing or invalid "content" string' });
+      return;
+    }
+    if (Buffer.byteLength(content, 'utf-8') > AGENT_CONTEXT_MAX_BYTES) {
+      res.status(413).json({ error: `Context exceeds ${AGENT_CONTEXT_MAX_BYTES}-byte cap` });
+      return;
+    }
+    const { mkdirSync, writeFileSync, renameSync } = await import('node:fs');
+    mkdirSync(HAP_DATA_DIR, { recursive: true });
+    // Atomic write: tmp + rename, so a crash mid-save can't leave a half-written
+    // file that the MCP loader would then broadcast to every agent.
+    const filePath = join(HAP_DATA_DIR, 'context.md');
+    const tmpPath = `${filePath}.tmp`;
+    writeFileSync(tmpPath, content, 'utf-8');
+    renameSync(tmpPath, filePath);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Control Plane] agent-brief/context PUT failed:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to write context' });
+  }
+});
+
+app.get('/agent-brief/preview', authGuard, async (_req: Request, res: Response) => {
+  try {
+    const data = await getBrief();
+    res.json(data);
+  } catch (err) {
+    console.error('[Control Plane] agent-brief/preview failed:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Brief preview failed' });
   }
 });
 

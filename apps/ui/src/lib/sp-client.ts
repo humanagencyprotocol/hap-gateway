@@ -600,6 +600,33 @@ class SPClient {
       throw new Error(err.error || `Push gate content failed: ${res.status}`);
     }
   }
+
+  // ─── Agent Brief (context.md + session-brief preview) ─────────────────
+
+  async getAgentContext(): Promise<string> {
+    const res = await this.fetch('/agent-brief/context');
+    if (!res.ok) throw new Error(`Failed to fetch agent context: ${res.status}`);
+    const data = await res.json() as { content: string };
+    return data.content;
+  }
+
+  async saveAgentContext(content: string): Promise<void> {
+    const res = await this.fetch('/agent-brief/context', {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to save agent context' }));
+      throw new Error((err as { error: string }).error || `Save failed: ${res.status}`);
+    }
+  }
+
+  async getAgentBriefPreview(): Promise<string> {
+    const res = await this.fetch('/agent-brief/preview');
+    if (!res.ok) throw new Error(`Failed to fetch brief preview: ${res.status}`);
+    const data = await res.json() as { brief: string };
+    return data.brief;
+  }
 }
 
 export const spClient = new SPClient();

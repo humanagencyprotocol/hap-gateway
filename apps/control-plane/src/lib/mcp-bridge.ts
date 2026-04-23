@@ -223,3 +223,18 @@ export async function getMcpHealth(): Promise<unknown> {
   if (!res.ok) throw new Error('MCP server unreachable');
   return res.json();
 }
+
+/**
+ * Fetch the live mandate brief — exactly what the next MCP session will
+ * receive as `instructions`. Used by the Agent Brief UI for the preview pane.
+ */
+export async function getBrief(): Promise<{ brief: string }> {
+  const res = await fetch(`${MCP_BASE}/internal/brief`, {
+    headers: internalHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(`MCP getBrief failed: ${(err as { error: string }).error}`);
+  }
+  return res.json() as Promise<{ brief: string }>;
+}

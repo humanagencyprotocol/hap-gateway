@@ -12,6 +12,7 @@ import { AuthorizationsPage } from './pages/AuthorizationsPage';
 import { AuditPage } from './pages/AuditPage';
 import { SettingsServicesPage } from './pages/SettingsServicesPage';
 import { ProposalReviewPage } from './pages/ProposalReviewPage';
+import { AgentBriefPage } from './pages/AgentBriefPage';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, mode, domain } = useAuth();
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route path="/authorizations" element={<AuthorizationsPage />} />
         <Route path="/audit" element={<AuditPage />} />
         <Route path="/proposals" element={<ProposalReviewPage />} />
+        <Route path="/agent-brief" element={<AgentBriefPage />} />
         <Route path="/settings" element={<SettingsServicesPage />} />
         {/* Redirect old routes */}
         <Route path="/settings/services" element={<Navigate to="/settings" replace />} />
