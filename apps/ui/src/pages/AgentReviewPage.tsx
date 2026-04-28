@@ -31,6 +31,8 @@ export function AgentReviewPage() {
   const [gateData, setGateData] = useState<GateData | null>(null);
   const [profile, setProfile] = useState<AgentProfile | null>(null);
   const [commitMode, setCommitMode] = useState<'immediate' | 'per-action'>('immediate');
+  /** True when above-cap with approvers — review is forced, selector hidden. */
+  const [forcedReview, setForcedReview] = useState(false);
   const [ttlSeconds, setTtlSeconds] = useState(1800);
   const [ttlMax, setTtlMax] = useState(86400);
   const [customTtl, setCustomTtl] = useState('');
@@ -56,6 +58,12 @@ export function AgentReviewPage() {
 
     setAuthData(auth);
     setGateData(normalizedGate);
+
+    // Forced review: above-cap with approvers — override mode and hide selector
+    if (gate.forcedReview) {
+      setForcedReview(true);
+      setCommitMode('per-action');
+    }
 
     // Set TTL from profile config
     if (gate.ttlConfig) {
@@ -267,44 +275,58 @@ export function AgentReviewPage() {
         <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '1rem', marginBottom: '0.5rem' }}>
           Commitment
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
-          <button
-            onClick={() => setCommitMode('immediate')}
-            style={{
-              flex: 1,
-              padding: '0.75rem',
-              border: commitMode === 'immediate' ? '2px solid var(--accent)' : '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              background: commitMode === 'immediate' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-              cursor: 'pointer',
-              textAlign: 'left',
-              fontFamily: 'inherit',
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--text-primary)' }}>Automatic</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Agent acts freely within your limits.
-            </div>
-          </button>
-          <button
-            onClick={() => setCommitMode('per-action')}
-            style={{
-              flex: 1,
-              padding: '0.75rem',
-              border: commitMode === 'per-action' ? '2px solid var(--accent)' : '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              background: commitMode === 'per-action' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-              cursor: 'pointer',
-              textAlign: 'left',
-              fontFamily: 'inherit',
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--text-primary)' }}>Review Each Action</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              You review and approve each action before it executes.
-            </div>
-          </button>
-        </div>
+        {forcedReview ? (
+          <div style={{
+            padding: '0.65rem 0.875rem',
+            border: '1px solid var(--warning)',
+            borderRadius: '0.375rem',
+            fontSize: '0.82rem',
+            marginBottom: '1.25rem',
+            lineHeight: 1.5,
+          }}>
+            <span style={{ fontWeight: 600 }}>Review Each Action — forced.</span>{' '}
+            This authority is above team cap. Every action requires approval from you and all profile approvers before it executes.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <button
+              onClick={() => setCommitMode('immediate')}
+              style={{
+                flex: 1,
+                padding: '0.75rem',
+                border: commitMode === 'immediate' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                background: commitMode === 'immediate' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontFamily: 'inherit',
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--text-primary)' }}>Automatic</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                Agent acts freely within your limits.
+              </div>
+            </button>
+            <button
+              onClick={() => setCommitMode('per-action')}
+              style={{
+                flex: 1,
+                padding: '0.75rem',
+                border: commitMode === 'per-action' ? '2px solid var(--accent)' : '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                background: commitMode === 'per-action' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontFamily: 'inherit',
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--text-primary)' }}>Review Each Action</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                You review and approve each action before it executes.
+              </div>
+            </button>
+          </div>
+        )}
 
         {/* Duration selector */}
         <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>

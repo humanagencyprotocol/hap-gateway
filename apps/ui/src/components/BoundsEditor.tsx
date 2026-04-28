@@ -1,15 +1,25 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ClipboardEvent } from 'react';
 import type { AgentProfile, AgentBoundsParams, AgentContextParams, AgentFrameParams, ProfileBoundsField, ProfileContextField } from '@hap/core';
 import { DiscoveredScopeField } from './DiscoveredScopeField';
-import { spClient, type IntegrationManifest } from '../lib/sp-client';
+import { spClient, type IntegrationManifest, type ProfileConfig } from '../lib/sp-client';
 
 interface Props {
   profile: AgentProfile;
   onConfirm: (bounds: AgentBoundsParams, context: AgentContextParams) => void;
+  /** Called whenever the forced-review state changes (above cap with approvers). */
+  onForcedReviewChange?: (forced: boolean) => void;
+  /** Called when user clicks Cancel in the hard-ceiling zone. */
+  onCancel?: () => void;
   readOnly?: boolean;
   initialBounds?: AgentBoundsParams;
   initialContext?: AgentContextParams;
   initialFrame?: AgentFrameParams;
+  /** Team profile config from SP. Null/undefined = no config, render as today. */
+  profileConfig?: ProfileConfig | null;
+  /** Display names for approver userIds. Parallel array to profileConfig.approvers. */
+  approverNames?: string[];
+  /** Display name of the team admin (for hard-ceiling message). */
+  adminName?: string;
 }
 
 /**
@@ -407,9 +417,71 @@ function FieldRow({
   );
 }
 
+// ─── Cap helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Determine which zone we are in based on current bound values + profile config.
+ * Returns one of:
+ *   'no-config'      — profileConfig is null/undefined; render as today
+ *   'within-cap'     — all bounds are at or below every configured cap
+ *   'above-approvers'— at least one bound exceeds its cap, AND approvers are set
+ *   'hard-ceiling'   — at least one bound exceeds its cap, AND no approvers
+ */
+type CapZone = 'no-config' | 'within-cap' | 'above-approvers' | 'hard-ceiling';
+
+function computeCapZone(
+  boundsValues: Record<string, string>,
+  profileConfig: ProfileConfig | null | undefined,
+): CapZone {
+  if (!profileConfig) return 'no-config';
+  const caps = profileConfig.caps;
+  if (!caps || Object.keys(caps).length === 0) return 'within-cap';
+
+  let anyViolating = false;
+  for (const [key, cap] of Object.entries(caps)) {
+    const raw = boundsValues[key];
+    if (raw === '' || raw === undefined) continue;
+    const val = Number(raw);
+    if (!isNaN(val) && val > cap) {
+      anyViolating = true;
+      break;
+    }
+  }
+  if (!anyViolating) return 'within-cap';
+  return profileConfig.approvers.length > 0 ? 'above-approvers' : 'hard-ceiling';
+}
+
+/** Returns the set of bound keys that currently violate their cap. */
+function violatingKeys(
+  boundsValues: Record<string, string>,
+  caps: Record<string, number> | undefined,
+): Set<string> {
+  const out = new Set<string>();
+  if (!caps) return out;
+  for (const [key, cap] of Object.entries(caps)) {
+    const raw = boundsValues[key];
+    if (raw === '' || raw === undefined) continue;
+    const val = Number(raw);
+    if (!isNaN(val) && val > cap) out.add(key);
+  }
+  return out;
+}
+
 // ─── BoundsEditor ───────────────────────────────────────────────────────────
 
-export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, initialContext, initialFrame }: Props) {
+export function BoundsEditor({
+  profile,
+  onConfirm,
+  onForcedReviewChange,
+  onCancel,
+  readOnly,
+  initialBounds,
+  initialContext,
+  initialFrame,
+  profileConfig,
+  approverNames,
+  adminName,
+}: Props) {
   const boundsSchema = profile.boundsSchema ?? profile.frameSchema;
   const contextSchema = profile.contextSchema;
 
@@ -457,6 +529,16 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
       .catch(() => setDiscoveryIntegration(null));
   }, [profile.id]);
 
+  // Compute cap zone reactively from current bound values
+  const zone = computeCapZone(boundsValues, profileConfig);
+  const forcedReview = zone === 'above-approvers';
+  const violating = violatingKeys(boundsValues, profileConfig?.caps);
+
+  // Notify parent when forced-review state changes
+  useEffect(() => {
+    onForcedReviewChange?.(forcedReview);
+  }, [forcedReview, onForcedReviewChange]);
+
   const handleBoundsChange = (key: string, value: string) => {
     setBoundsValues(prev => ({ ...prev, [key]: value }));
   };
@@ -465,11 +547,8 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
     setContextValues(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleConfirm = () => {
-    const bounds: AgentBoundsParams = {
-      profile: profile.id,
-    };
-
+  const buildBoundsAndContext = (): [AgentBoundsParams, AgentContextParams] => {
+    const bounds: AgentBoundsParams = { profile: profile.id };
     for (const [key, fieldDef] of boundsFields) {
       if (fieldDef.type === 'number') {
         bounds[key] = boundsValues[key] === '' ? 0 : Number(boundsValues[key]);
@@ -477,9 +556,7 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
         bounds[key] = boundsValues[key];
       }
     }
-
     const context: AgentContextParams = {};
-
     for (const [key, fieldDef] of contextFields) {
       if (fieldDef.type === 'number') {
         context[key] = contextValues[key] === '' ? 0 : Number(contextValues[key]);
@@ -487,9 +564,161 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
         context[key] = contextValues[key];
       }
     }
+    return [bounds, context];
+  };
 
+  const handleConfirm = () => {
+    const [bounds, context] = buildBoundsAndContext();
     onConfirm(bounds, context);
   };
+
+  /** Clamp all violating bounds to their cap value, then proceed. */
+  const handleSaveBelowCap = () => {
+    const caps = profileConfig?.caps ?? {};
+    const clamped = { ...boundsValues };
+    for (const key of violating) {
+      if (caps[key] !== undefined) {
+        clamped[key] = String(caps[key]);
+      }
+    }
+    setBoundsValues(clamped);
+    // Build bounds from clamped values inline (state update is async)
+    const bounds: AgentBoundsParams = { profile: profile.id };
+    for (const [key, fieldDef] of boundsFields) {
+      if (fieldDef.type === 'number') {
+        const raw = clamped[key] ?? '';
+        bounds[key] = raw === '' ? 0 : Number(raw);
+      } else {
+        bounds[key] = clamped[key] ?? '';
+      }
+    }
+    const context: AgentContextParams = {};
+    for (const [key, fieldDef] of contextFields) {
+      if (fieldDef.type === 'number') {
+        context[key] = contextValues[key] === '' ? 0 : Number(contextValues[key]);
+      } else {
+        context[key] = contextValues[key];
+      }
+    }
+    onConfirm(bounds, context);
+  };
+
+  // ─── Render cap indicator for a single bound key ───────────────────────
+
+  const renderCapIndicator = (key: string) => {
+    const caps = profileConfig?.caps;
+    if (!caps || caps[key] === undefined) return null;
+    const cap = caps[key];
+    const isViolating = violating.has(key);
+
+    if (zone === 'hard-ceiling' && isViolating) {
+      return (
+        <span style={{ fontSize: '0.72rem', color: 'var(--danger)', marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>
+          Cap: {cap} — exceeds team ceiling
+        </span>
+      );
+    }
+    if (zone === 'above-approvers' && isViolating) {
+      return (
+        <span style={{ fontSize: '0.72rem', color: 'var(--warning)', marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>
+          Cap: {cap} — above cap
+        </span>
+      );
+    }
+    // within-cap (or no violation on this specific key)
+    return (
+      <span style={{ fontSize: '0.72rem', color: 'var(--success)', marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>
+        Cap: {cap} ok
+      </span>
+    );
+  };
+
+  // ─── Zone footer panel ──────────────────────────────────────────────────
+
+  const renderZoneFooter = () => {
+    if (zone === 'no-config') return null;
+
+    if (zone === 'within-cap') {
+      return (
+        <div style={{
+          marginTop: '0.75rem',
+          padding: '0.75rem 1rem',
+          border: '1px solid var(--border)',
+          borderRadius: '0.375rem',
+          background: 'var(--bg-elevated)',
+          fontSize: '0.82rem',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Within all team caps — your responsibility.</div>
+        </div>
+      );
+    }
+
+    if (zone === 'above-approvers') {
+      const names = (approverNames && approverNames.length > 0) ? approverNames.join(', ') : 'the required approvers';
+      return (
+        <div style={{
+          marginTop: '0.75rem',
+          padding: '0.75rem 1rem',
+          border: '1px solid var(--warning)',
+          borderRadius: '0.375rem',
+          background: 'var(--bg-elevated)',
+          fontSize: '0.82rem',
+        }}>
+          <div style={{ fontWeight: 600, color: 'var(--warning)', marginBottom: '0.25rem' }}>Above team cap.</div>
+          <div>
+            Every action under this authority will require approval from you and {names}.
+            Forced review for everyone. Your intent will be visible to approvers at review time.
+          </div>
+        </div>
+      );
+    }
+
+    if (zone === 'hard-ceiling') {
+      // Find the first violating bound and its cap for the message
+      const firstViolatingKey = Array.from(violating)[0];
+      const cap = firstViolatingKey ? profileConfig?.caps?.[firstViolatingKey] : undefined;
+      const admin = adminName ?? 'the team admin';
+      return (
+        <div style={{
+          marginTop: '0.75rem',
+          padding: '0.75rem 1rem',
+          border: '1px solid var(--danger)',
+          borderRadius: '0.375rem',
+          background: 'var(--bg-elevated)',
+          fontSize: '0.82rem',
+        }}>
+          <div style={{ fontWeight: 600, color: 'var(--danger)', marginBottom: '0.25rem' }}>Hard team ceiling.</div>
+          <div style={{ marginBottom: '0.75rem' }}>
+            Team policy caps this at {cap ?? 'the configured limit'}.
+            Lower your bound or ask {admin} to add an approver path above the cap.
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleSaveBelowCap}
+            >
+              Save below cap
+            </button>
+            {onCancel && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={onCancel}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  // Whether the primary Continue button should be disabled
+  const continueBlocked = zone === 'hard-ceiling';
 
   return (
     <div>
@@ -531,22 +760,37 @@ export function BoundsEditor({ profile, onConfirm, readOnly, initialBounds, init
           </div>
           <div className="bounds-fields-grid">
             {boundsFields.map(([key, fieldDef]) => (
-              <FieldRow
-                key={`bounds-${key}`}
-                fieldKey={key}
-                fieldDef={fieldDef}
-                value={boundsValues[key]}
-                onChange={handleBoundsChange}
-                prefix="bounds"
-                readOnly={readOnly}
-                twoColumn
-              />
+              <div key={`bounds-${key}`} style={{ display: 'contents' }}>
+                <FieldRow
+                  fieldKey={key}
+                  fieldDef={fieldDef}
+                  value={boundsValues[key]}
+                  onChange={handleBoundsChange}
+                  prefix="bounds"
+                  readOnly={readOnly}
+                  twoColumn
+                />
+                {/* Cap indicator appended after the input column, inside the grid row */}
+                {zone !== 'no-config' && profileConfig?.caps?.[key] !== undefined && (
+                  <div style={{ gridColumn: '2 / 3', display: 'flex', alignItems: 'center', paddingBottom: '0.5rem' }}>
+                    {renderCapIndicator(key)}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
+
+          {/* Zone footer */}
+          {renderZoneFooter()}
         </div>
       )}
 
-      <button className="btn btn-primary" onClick={handleConfirm} style={{ marginTop: '0.5rem' }}>
+      <button
+        className="btn btn-primary"
+        onClick={handleConfirm}
+        disabled={continueBlocked}
+        style={{ marginTop: '0.5rem' }}
+      >
         {readOnly ? 'Next: Gates' : 'Next: Problem Statement'}
       </button>
     </div>

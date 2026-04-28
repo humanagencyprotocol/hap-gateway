@@ -191,6 +191,17 @@ export interface ExecutionReceipt {
   proposalId?: string;
 }
 
+/**
+ * Per-profile team configuration (admin-set).
+ * Mirrors hap-sp/src/lib/profile-config-store.ts — do not import from there.
+ */
+export interface ProfileConfig {
+  /** userIds of required approvers for above-cap actions */
+  approvers: string[];
+  /** Optional per-bound ceiling. Key = bound field name, value = max allowed. */
+  caps?: Record<string, number>;
+}
+
 export interface McpHealthResponse {
   status: string;
   transports: string[];
@@ -556,11 +567,51 @@ class SPClient {
 
   // ─── Team Profile Config ────────────────────────────────────────────────
 
-  async getTeamProfileConfig(groupId: string): Promise<Record<string, Record<string, string[]>>> {
-    const res = await this.fetch(`/api/groups/${encodeURIComponent(groupId)}/path-domains`);
-    if (!res.ok) return {};
-    const data = await res.json();
-    return data.pathDomains ?? {};
+  /**
+   * Fetch profile-level caps + approvers for a team profile.
+   * Returns null on 404 (no config set for this profile).
+   * Endpoint: GET /api/groups/:id/profile-config/:profileId
+   */
+  async getTeamProfileConfig(groupId: string, profileId: string): Promise<ProfileConfig | null> {
+    const res = await this.fetch(
+      `/api/groups/${encodeURIComponent(groupId)}/profile-config/${encodeURIComponent(profileId)}`,
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  /**
+   * Set (or replace) profile-level caps + approvers. Admin-only on the SP side.
+   * Endpoint: PUT /api/groups/:id/profile-config/:profileId
+   */
+  async setTeamProfileConfig(groupId: string, profileId: string, config: ProfileConfig): Promise<void> {
+    const res = await this.fetch(
+      `/api/groups/${encodeURIComponent(groupId)}/profile-config/${encodeURIComponent(profileId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(config),
+      },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to set profile config' }));
+      throw new Error((err as { error: string }).error || `setTeamProfileConfig failed: ${res.status}`);
+    }
+  }
+
+  /**
+   * Delete the profile config for a team profile. Admin-only on the SP side.
+   * Endpoint: DELETE /api/groups/:id/profile-config/:profileId
+   */
+  async deleteTeamProfileConfig(groupId: string, profileId: string): Promise<void> {
+    const res = await this.fetch(
+      `/api/groups/${encodeURIComponent(groupId)}/profile-config/${encodeURIComponent(profileId)}`,
+      { method: 'DELETE' },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to delete profile config' }));
+      throw new Error((err as { error: string }).error || `deleteTeamProfileConfig failed: ${res.status}`);
+    }
   }
 
   // ─── Proposals ──────────────────────────────────────────────────────────

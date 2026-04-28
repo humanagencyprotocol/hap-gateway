@@ -14,110 +14,90 @@ interface GroupDetail {
     role: string;
     isAdmin: boolean;
   }>;
-  inviteCode?: string;
 }
 
+/**
+ * Read-only team context surface in the gateway. Team CRUD (create / join /
+ * invite / member admin / profile-config) lives on the Service Provider
+ * dashboard. The gateway shows the user's current team membership and a
+ * Leave action — nothing else. Linking out keeps the gateway focused on
+ * agent operations.
+ */
 export function GroupsPage() {
-  const { activeTeam, activeMembership, groups, setActiveContext, activeGroup, refreshGroups, user } = useAuth();
+  const { activeTeam, activeMembership, refreshGroups, user } = useAuth();
   const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
-  const [inviteCode, setInviteCode] = useState('');
-  const [joinCode, setJoinCode] = useState('');
-  const [newGroupName, setNewGroupName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [spUrl, setSpUrl] = useState('');
 
-  // selectedGroup: prefer activeTeam (the real team from SP), fall back to legacy activeGroup
-  const selectedGroup = activeTeam ?? activeGroup ?? (groups.length > 0 ? groups[0] : null);
+  // Fetch SP base URL once so we can build "Manage in your Service Provider" links.
+  useEffect(() => {
+    fetch('/health').then(r => r.json()).then(data => {
+      if (typeof data.spUrl === 'string') setSpUrl(data.spUrl);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
-    if (!selectedGroup) return;
-    spClient.getGroupById(selectedGroup.id)
+    if (!activeTeam) { setGroupDetail(null); return; }
+    spClient.getGroupById(activeTeam.id)
       .then(raw => {
         // SP returns { group, members, isAdmin } — normalize it
-        const g = (raw as any).group || raw;
-        const rawMembers = (raw as any).members || g.members || [];
-        const isAdminFromSP = (raw as any).isAdmin ?? false;
-        const members = rawMembers.map((m: any) => ({
-          id: m.userId || m.id || '',
-          name: m.name || m.userId?.slice(0, 8) || 'Member',
-          email: m.email || '',
-          domains: m.domains || [],
-          role: m.role || (isAdminFromSP && m.userId === g.createdBy ? 'admin' : 'member'),
-          isAdmin: m.role === 'admin' || (isAdminFromSP && m.userId === g.createdBy),
-        }));
-        setGroupDetail({ id: g.id, name: g.name, members, inviteCode: g.inviteCode });
-        setInviteCode(g.inviteCode || '');
+        const g = (raw as { group?: { id: string; name: string; createdBy?: string } }).group
+          ?? (raw as unknown as { id: string; name: string; createdBy?: string });
+        const rawMembers = (raw as { members?: Array<Record<string, unknown>> }).members ?? [];
+        const isAdminFromSP = (raw as { isAdmin?: boolean }).isAdmin ?? false;
+        const members = rawMembers.map(m => {
+          const userId = (m.userId as string) || (m.id as string) || '';
+          const role = (m.role as string) || (isAdminFromSP && userId === g.createdBy ? 'admin' : 'member');
+          return {
+            id: userId,
+            name: (m.name as string) || userId.slice(0, 8) || 'Member',
+            email: (m.email as string) || '',
+            domains: (m.domains as string[]) || [],
+            role,
+            isAdmin: role === 'admin' || (isAdminFromSP && userId === g.createdBy),
+          };
+        });
+        setGroupDetail({ id: g.id, name: g.name, members });
       })
-      .catch(() => {});
-  }, [selectedGroup?.id]);
+      .catch(() => setGroupDetail(null));
+  }, [activeTeam?.id]);
 
-  // Determine if the current user is the sole admin of the active team.
-  // Used to show a disabled leave button with an explanatory tooltip.
+  // Sole admin: cannot leave until admin is transferred (or team is deleted)
+  // on the SP dashboard. We keep this gate in the gateway so users who land
+  // here directly aren't allowed into a flow that will 409 server-side.
   const adminMembers = groupDetail?.members.filter(m => m.isAdmin) ?? [];
   const isSoleAdmin =
-    selectedGroup?.isAdmin === true &&
+    activeTeam?.isAdmin === true &&
     adminMembers.length <= 1 &&
     adminMembers.some(m => m.id === user?.id);
 
-  const handleGenerateInvite = async () => {
-    if (!selectedGroup) return;
-    setLoading(true);
-    try {
-      const result = await spClient.inviteToGroup(selectedGroup.id);
-      setInviteCode(result.inviteCode || result.code || '');
-      setSuccessMsg('Invite code generated!');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to generate invite');
-    } finally {
-      setLoading(false);
-    }
+  const teamName = activeTeam?.name ?? '';
+  const confirmReady = confirmText.trim() === teamName && !loading;
+
+  const openLeaveModal = () => {
+    setConfirmText('');
+    setShowLeaveConfirm(true);
   };
 
-  const handleJoin = async () => {
-    if (!joinCode.trim()) return;
-    setLoading(true);
-    setError('');
-    try {
-      await spClient.joinGroup(joinCode.trim());
-      await refreshGroups();
-      setSuccessMsg('Joined team!');
-      setJoinCode('');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to join team');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreate = async () => {
-    const name = newGroupName.trim();
-    if (!name) return;
-    setLoading(true);
-    setError('');
-    try {
-      await spClient.createGroup(name);
-      await refreshGroups();
-      setSuccessMsg(`Created ${name}!`);
-      setNewGroupName('');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create team');
-    } finally {
-      setLoading(false);
-    }
+  const closeLeaveModal = () => {
+    setShowLeaveConfirm(false);
+    setConfirmText('');
   };
 
   const handleLeave = async () => {
-    if (!selectedGroup) return;
+    if (!activeTeam || !confirmReady) return;
     setLoading(true);
     setError('');
-    setShowLeaveConfirm(false);
     try {
-      await spClient.leaveTeam(selectedGroup.id);
+      await spClient.leaveTeam(activeTeam.id);
       await refreshGroups();
       setSuccessMsg('You have left the team.');
       setGroupDetail(null);
+      closeLeaveModal();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to leave team');
     } finally {
@@ -125,54 +105,41 @@ export function GroupsPage() {
     }
   };
 
-  const copyInvite = () => {
-    navigator.clipboard.writeText(inviteCode);
-    setSuccessMsg('Copied to clipboard!');
-    setTimeout(() => setSuccessMsg(''), 2000);
-  };
+  // Build SP dashboard URLs. We point at the SP's existing /dashboard/groups
+  // surface; the SP owns team CRUD now.
+  const manageHref = activeTeam && spUrl ? `${spUrl}/dashboard/groups/${activeTeam.id}` : undefined;
+  const browseTeamsHref = spUrl ? `${spUrl}/dashboard/groups` : undefined;
 
   return (
     <>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header">
         <div>
           <h1 className="page-title">Team</h1>
-          <p className="page-subtitle">Manage your team and role assignments.</p>
+          <p className="page-subtitle">
+            Your current team context. Team management lives in your Service Provider dashboard.
+          </p>
         </div>
-        <button className="btn btn-primary" onClick={() => document.getElementById('create-group-section')?.scrollIntoView({ behavior: 'smooth' })}>
-          Create Team
-        </button>
       </div>
 
       {error && <div className="error-message">{error}</div>}
       {successMsg && <div className="alert alert-success">{successMsg}</div>}
 
-      {/* Active Group */}
-      {selectedGroup && (
+      {activeTeam ? (
         <div className="card" style={{ marginBottom: '1.5rem' }}>
           <div className="card-header">
             <div>
-              <h3 className="card-title">{selectedGroup.name}</h3>
+              <h3 className="card-title">{activeTeam.name}</h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>
-                {groupDetail?.members?.length || 0} members {selectedGroup.isAdmin && ' · You are admin'}
+                {groupDetail?.members?.length ?? 0} {(groupDetail?.members?.length ?? 0) === 1 ? 'member' : 'members'}
+                {activeTeam.isAdmin && ' · You are admin'}
+                {activeMembership?.domains?.length
+                  ? ` · Your domain${activeMembership.domains.length === 1 ? '' : 's'}: ${activeMembership.domains.join(', ')}`
+                  : ''}
               </p>
             </div>
             <span className="status-badge status-active">Active</span>
           </div>
 
-          {/* Invite code */}
-          {inviteCode ? (
-            <div style={{ background: 'var(--accent-subtle)', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Invite code:</span>
-              <code style={{ fontSize: '0.85rem', fontWeight: 600, flex: 1 }}>{inviteCode}</code>
-              <button className="btn btn-ghost btn-sm" onClick={copyInvite}>Copy</button>
-            </div>
-          ) : selectedGroup.isAdmin ? (
-            <button className="btn btn-secondary btn-sm" onClick={handleGenerateInvite} disabled={loading} style={{ marginBottom: '1rem' }}>
-              Generate Invite Code
-            </button>
-          ) : null}
-
-          {/* Member list */}
           {groupDetail?.members?.map(member => (
             <div className="member-row" key={member.id}>
               <div className="member-avatar">
@@ -191,86 +158,115 @@ export function GroupsPage() {
             </div>
           ))}
 
-          {/* Leave team button — only shown when user has an active team membership */}
-          {activeMembership && (
-            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-              {showLeaveConfirm ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    Leave {selectedGroup.name}? Your active authorizations will be revoked.
-                  </span>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    style={{ color: 'var(--error, #e53e3e)' }}
-                    onClick={handleLeave}
-                    disabled={loading}
-                  >
-                    Confirm leave
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setShowLeaveConfirm(false)}
-                    disabled={loading}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <span title={isSoleAdmin ? 'Transfer admin first or delete the team' : undefined}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ color: 'var(--text-tertiary)' }}
-                    onClick={() => setShowLeaveConfirm(true)}
-                    disabled={loading || isSoleAdmin}
-                  >
-                    Leave team
-                  </button>
-                </span>
-              )}
-            </div>
+          <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {manageHref && (
+              <a
+                className="btn btn-secondary btn-sm"
+                href={manageHref}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Manage this team in your Service Provider &rarr;
+              </a>
+            )}
+            <span title={isSoleAdmin ? 'You are the only admin. Transfer admin to another member in your Service Provider dashboard before leaving.' : undefined} style={{ marginLeft: 'auto' }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--text-tertiary)' }}
+                onClick={openLeaveModal}
+                disabled={loading || isSoleAdmin}
+              >
+                Leave team
+              </button>
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="card" style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
+          <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>You are working solo.</h3>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem', maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
+            Every authorization you create here is in your personal context. You can join an existing
+            team or create a new one in your Service Provider dashboard.
+          </p>
+          {browseTeamsHref && (
+            <a
+              className="btn btn-primary btn-sm"
+              href={browseTeamsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Service Provider dashboard &rarr;
+            </a>
           )}
         </div>
       )}
 
-      {/* Join Another Group */}
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Join Another Team</h4>
-        <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Enter an invite code from a team admin.
-        </p>
-        <div className="invite-input-row">
-          <input
-            className="form-input"
-            placeholder="Paste invite code..."
-            value={joinCode}
-            onChange={e => setJoinCode(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleJoin()}
-            style={{ fontFamily: "'SF Mono', Monaco, monospace", fontSize: '0.85rem' }}
-            disabled={loading}
-          />
-          <button className="btn btn-primary" onClick={handleJoin} disabled={loading}>Join</button>
+      {showLeaveConfirm && activeTeam && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="leave-team-title"
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: '1rem',
+          }}
+          onClick={closeLeaveModal}
+        >
+          <div
+            className="card"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: 480, width: '100%', margin: 0 }}
+          >
+            <h3 id="leave-team-title" className="card-title" style={{ marginBottom: '0.5rem' }}>
+              Leave {teamName}?
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+              Leaving will:
+            </p>
+            <ul style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem', paddingLeft: '1.25rem', lineHeight: 1.6 }}>
+              <li>Revoke all authorizations you created in this team's context</li>
+              <li>Reject any pending action proposals you authored</li>
+              <li>Disable your membership — rejoining requires admin reactivation</li>
+            </ul>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Your <strong>personal</strong> authorizations are not affected.
+            </p>
+            <div className="form-group">
+              <label htmlFor="leave-confirm-input" style={{ fontSize: '0.825rem', display: 'block', marginBottom: '0.375rem' }}>
+                Type <code>{teamName}</code> to confirm:
+              </label>
+              <input
+                id="leave-confirm-input"
+                className="form-input"
+                type="text"
+                value={confirmText}
+                onChange={e => setConfirmText(e.target.value)}
+                placeholder={teamName}
+                disabled={loading}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button
+                className="btn btn-ghost"
+                onClick={closeLeaveModal}
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{ color: 'var(--danger, #e53e3e)' }}
+                onClick={handleLeave}
+                disabled={!confirmReady}
+              >
+                {loading ? 'Leaving...' : 'Leave team'}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Create Group */}
-      <div className="card" id="create-group-section">
-        <h4 style={{ fontSize: '0.95rem', marginBottom: '0.25rem' }}>Create a New Team</h4>
-        <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Start a new team and invite members.
-        </p>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <input
-            className="form-input"
-            placeholder="Team name (e.g., Acme Corp)"
-            value={newGroupName}
-            onChange={e => setNewGroupName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleCreate()}
-            style={{ flex: 1 }}
-            disabled={loading}
-          />
-          <button className="btn btn-secondary" onClick={handleCreate} disabled={loading}>Create</button>
-        </div>
-      </div>
+      )}
     </>
   );
 }

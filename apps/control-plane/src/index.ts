@@ -500,6 +500,7 @@ app.get('/health', async (req: Request, res: Response) => {
     vaultUnlocked: vault.isUnlocked(),
     version: update.runningSha,
     updateAvailable: update.updateAvailable,
+    spUrl: SP_URL,
     security: {
       note: 'Gateway secures tool execution. Agent host isolation is the user\'s responsibility.',
     },

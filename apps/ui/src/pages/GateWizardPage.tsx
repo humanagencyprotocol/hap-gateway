@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { spClient } from '../lib/sp-client';
+import { spClient, type ProfileConfig } from '../lib/sp-client';
 import { StepIndicator } from '../components/StepIndicator';
 import { ContextStrip } from '../components/ContextStrip';
 import { BoundsEditor } from '../components/BoundsEditor';
@@ -25,7 +25,14 @@ export function GateWizardPage() {
   const [context, setContext] = useState<AgentContextParams | null>(null);
   const [intent, setIntent] = useState('');
   const [loading, setLoading] = useState(true);
-
+  // Team profile config — null when not in team mode or no config set
+  const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
+  // Resolved display names for approver userIds
+  const [approverNames, setApproverNames] = useState<string[]>([]);
+  // Display name of the team admin
+  const [adminName, setAdminName] = useState<string | undefined>(undefined);
+  // Whether bounds are currently above cap with approvers (forced review)
+  const [forcedReview, setForcedReview] = useState(false);
 
   useEffect(() => {
     const stored = sessionStorage.getItem('agentAuth');
@@ -46,6 +53,27 @@ export function GateWizardPage() {
       .then(p => setProfile(p))
       .catch(() => navigate('/agent/new'))
       .finally(() => setLoading(false));
+
+    // Fetch team profile config when in team mode
+    if (data.groupId) {
+      Promise.all([
+        spClient.getTeamProfileConfig(data.groupId, data.profileId)
+          .catch(() => null),
+        spClient.getGroupById(data.groupId)
+          .catch(() => null),
+      ]).then(([config, groupData]) => {
+        setProfileConfig(config);
+        if (config && groupData) {
+          // Resolve approver display names from group member list
+          const memberMap = new Map(groupData.members.map(m => [m.id, m.name]));
+          const names = (config.approvers ?? []).map(id => memberMap.get(id) ?? id);
+          setApproverNames(names);
+          // Admin = member with role 'admin'
+          const admin = groupData.members.find(m => m.role === 'admin');
+          setAdminName(admin?.name);
+        }
+      });
+    }
   }, [navigate]);
 
   const boundsString = bounds
@@ -102,7 +130,7 @@ export function GateWizardPage() {
   const handleIntentNext = () => {
     const ttlConfig = profile?.ttl;
     const gateContent = { intent };
-    sessionStorage.setItem('agentGate', JSON.stringify({ bounds, context, gateContent, ttlConfig }));
+    sessionStorage.setItem('agentGate', JSON.stringify({ bounds, context, gateContent, ttlConfig, forcedReview }));
     navigate('/agent/review');
   };
 
@@ -128,8 +156,13 @@ export function GateWizardPage() {
           <BoundsEditor
             profile={profile}
             onConfirm={handleBoundsConfirm}
+            onForcedReviewChange={setForcedReview}
+            onCancel={() => navigate('/agent/new')}
             initialBounds={bounds || undefined}
             initialContext={context || undefined}
+            profileConfig={profileConfig}
+            approverNames={approverNames}
+            adminName={adminName}
           />
         </div>
       )}
@@ -146,6 +179,23 @@ export function GateWizardPage() {
             <li><strong>Goal</strong> — What should the agent try to achieve?</li>
             <li><strong>Watch out</strong> — What should the agent avoid or be careful about?</li>
           </ul>
+
+          {/* Intent-encryption notice — shown whenever the profile has approvers configured */}
+          {(profileConfig?.approvers?.length ?? 0) > 0 && (
+            <div style={{
+              padding: '0.65rem 0.875rem',
+              border: '1px solid var(--border)',
+              borderRadius: '0.375rem',
+              background: 'var(--bg-elevated)',
+              fontSize: '0.8rem',
+              marginBottom: '0.75rem',
+              lineHeight: 1.55,
+            }}>
+              Your intent will be encrypted and shared with this profile's required approvers.
+              Only they can decrypt it — your Service Provider cannot.
+              Each approver stores a copy as their accountability record.
+            </div>
+          )}
 
           <div className="form-group" style={{ marginBottom: '0.5rem' }}>
             <textarea

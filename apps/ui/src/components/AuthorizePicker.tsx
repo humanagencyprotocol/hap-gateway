@@ -7,6 +7,7 @@ import {
   type IntegrationManifest,
   type McpIntegrationStatus,
   type AuthTemplate,
+  type ProfileConfig,
 } from '../lib/sp-client';
 import { profileDisplayName } from '../lib/profile-display';
 
@@ -27,7 +28,7 @@ export function AuthorizePicker({ onDismiss }: Props) {
   const [manifests, setManifests] = useState<IntegrationManifest[]>([]);
   const [integrations, setIntegrations] = useState<McpIntegrationStatus[]>([]);
   const [loading, setLoading] = useState(true);
-  const [teamProfiles, setTeamProfiles] = useState<Record<string, Record<string, string[]>>>({});
+  const [teamProfiles, setTeamProfiles] = useState<Record<string, ProfileConfig>>({});
   const [modalProfile, setModalProfile] = useState<{ profileId: string; manifest: IntegrationManifest } | null>(null);
 
   useEffect(() => {
@@ -35,12 +36,26 @@ export function AuthorizePicker({ onDismiss }: Props) {
       spClient.listProfiles().catch(() => []),
       spClient.getIntegrationManifests().then(d => d.manifests ?? []).catch(() => []),
       spClient.getMcpHealth().then(h => h.integrations ?? []).catch(() => []),
-      groupId ? spClient.getTeamProfileConfig(groupId).catch(() => ({})) : Promise.resolve({}),
-    ]).then(([profileList, manifestList, integrationList, teamConfig]) => {
+    ]).then(async ([profileList, manifestList, integrationList]) => {
       setProfiles(profileList);
       setManifests(manifestList);
       setIntegrations(integrationList);
-      setTeamProfiles(teamConfig as Record<string, Record<string, string[]>>);
+
+      // Phase 3: profile-config is per-profile now. Fetch in parallel for
+      // the team's profiles so we can show the "Team" badge on managed ones.
+      if (groupId) {
+        const configs = await Promise.all(
+          profileList.map(p =>
+            spClient.getTeamProfileConfig(groupId, p.id).catch(() => null),
+          ),
+        );
+        const teamConfigMap: Record<string, ProfileConfig> = {};
+        profileList.forEach((p, i) => {
+          const c = configs[i];
+          if (c) teamConfigMap[p.id] = c;
+        });
+        setTeamProfiles(teamConfigMap);
+      }
     }).finally(() => setLoading(false));
   }, [groupId]);
 
@@ -59,8 +74,7 @@ export function AuthorizePicker({ onDismiss }: Props) {
     return profileManifestMap.has(shortId);
   });
 
-  const isTeamManaged = (profileId: string): boolean =>
-    profileId in teamProfiles && Object.keys(teamProfiles[profileId]).length > 0;
+  const isTeamManaged = (profileId: string): boolean => profileId in teamProfiles;
 
   const storeAuthAndNavigate = (profileId: string, template?: AuthTemplate) => {
     if (!groupId) {

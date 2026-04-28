@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { spClient, type PendingItem, type GateContentEntry } from '../lib/sp-client';
+import { spClient, type PendingItem, type GateContentEntry, type ProfileConfig } from '../lib/sp-client';
 import { profileDisplayName } from '../lib/profile-display';
 import { AuthorizePicker } from '../components/AuthorizePicker';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -58,7 +58,13 @@ export function AuthorizationsPage() {
   const [copyingHash, setCopyingHash] = useState<string | null>(null);
 
   const navigate = useNavigate();
-  const { group, groupId, domain: activeDomain } = useAuth();
+  const { group, groupId, domain: activeDomain, mode } = useAuth();
+
+  // One ProfileConfig fetch per unique profileId — memoized so we never
+  // re-fetch a profileId we've already resolved (including null results).
+  const [profileConfigCache, setProfileConfigCache] = useState<Map<string, ProfileConfig | null>>(
+    () => new Map(),
+  );
 
   const fetchItems = useCallback(() => {
     setLoading(true);
@@ -69,6 +75,31 @@ export function AuthorizationsPage() {
   }, []);
 
   useVisiblePolling(fetchItems, 120_000);
+
+  // When items load (or groupId changes), fetch profile-config for each unique
+  // profileId we haven't resolved yet — but only in team mode.
+  useEffect(() => {
+    if (mode !== 'team' || !groupId || items.length === 0) return;
+    const unseen = [...new Set(items.map(i => i.profile_id))].filter(
+      id => !profileConfigCache.has(id),
+    );
+    if (unseen.length === 0) return;
+    // Mark as in-flight immediately to prevent duplicate fetches on re-renders
+    setProfileConfigCache(prev => {
+      const next = new Map(prev);
+      for (const id of unseen) next.set(id, null);
+      return next;
+    });
+    for (const profileId of unseen) {
+      spClient.getTeamProfileConfig(groupId, profileId)
+        .then(config => {
+          setProfileConfigCache(prev => new Map(prev).set(profileId, config));
+        })
+        .catch(() => {
+          // leave as null (already set above)
+        });
+    }
+  }, [items, groupId, mode, profileConfigCache]);
 
   const handleExpand = async (item: PendingItem) => {
     if (expandedHash === item.frame_hash) {
@@ -349,6 +380,22 @@ export function AuthorizationsPage() {
             const boundsEntries = Object.entries(item.frame)
               .filter(([k]) => k !== 'profile' && k !== 'path');
 
+            // Compute "reduced by team cap" — any bound authorized above current cap
+            const itemConfig = profileConfigCache.get(item.profile_id) ?? null;
+            const reducedBounds: Array<{ key: string; authorized: number; cap: number }> = [];
+            if (itemConfig?.caps && mode === 'team') {
+              for (const [k, v] of boundsEntries) {
+                const cap = itemConfig.caps[k];
+                if (cap !== undefined && Number(v) > cap) {
+                  reducedBounds.push({ key: k, authorized: Number(v), cap });
+                }
+              }
+            }
+            const isReduced = reducedBounds.length > 0;
+            const reducedTooltip = isReduced
+              ? `Authorized for ${reducedBounds[0].authorized}, team cap now ${reducedBounds[0].cap} — effective ${reducedBounds[0].cap}. Ask the team admin to raise the cap, or copy this authorization to reissue.`
+              : undefined;
+
             return (
               <div className="card" key={item.frame_hash} style={{ marginBottom: 0 }}>
                 {/* Collapsed view */}
@@ -393,6 +440,22 @@ export function AuthorizationsPage() {
                       fontWeight: 600,
                     }}>
                       Review Mode
+                    </span>
+                  )}
+                  {isReduced && (
+                    <span
+                      title={reducedTooltip}
+                      style={{
+                        fontSize: '0.65rem',
+                        padding: '0.15rem 0.4rem',
+                        borderRadius: '0.25rem',
+                        background: 'var(--danger-subtle)',
+                        color: 'var(--danger)',
+                        fontWeight: 600,
+                        cursor: 'help',
+                      }}
+                    >
+                      Reduced by team cap
                     </span>
                   )}
                 </div>
