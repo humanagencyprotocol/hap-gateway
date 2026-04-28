@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { spClient } from '../lib/sp-client';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
+import { useSSEEvent } from '../contexts/EventSourceContext';
 import { useIntegrationStatus } from '../contexts/IntegrationStatusContext';
 
 interface NavItem {
@@ -61,7 +62,13 @@ function useOtherNavStatus() {
     }
   }, [activeDomain]);
 
-  useVisiblePolling(poll, 60_000, activeDomain);
+  // SSE-driven refresh: fire immediately on events that change badge counts.
+  useSSEEvent('attestation-changed', poll);
+  useSSEEvent('proposal-added', poll);
+  useSSEEvent('proposal-resolved', poll);
+  useSSEEvent('team-membership-changed', poll);
+  // Fallback full-sync every 5min in case of missed events.
+  useVisiblePolling(poll, 300_000, activeDomain);
   return counts;
 }
 

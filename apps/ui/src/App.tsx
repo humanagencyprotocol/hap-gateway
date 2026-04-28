@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { EventSourceProvider } from './contexts/EventSourceContext';
 import { AppShell } from './components/AppShell';
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
@@ -59,7 +60,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <EventSourceProvider>
+          <AppRoutes />
+        </EventSourceProvider>
       </AuthProvider>
     </BrowserRouter>
   );

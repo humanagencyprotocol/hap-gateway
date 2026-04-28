@@ -11,6 +11,7 @@ import {
   removeIntegration,
   getMcpHealth,
 } from '../lib/mcp-bridge';
+import { eventBus } from '../lib/event-bus';
 
 export function createMCPRouter(): Router {
   const router = Router();
@@ -36,6 +37,7 @@ export function createMCPRouter(): Router {
   router.post('/integrations', async (req: Request, res: Response) => {
     try {
       const data = await addIntegration(req.body);
+      eventBus.emit('integration-changed');
       res.json(data);
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to add integration' });
@@ -67,6 +69,7 @@ export function createMCPRouter(): Router {
         return;
       }
       const data = await activateIntegration(manifest);
+      eventBus.emit('integration-changed');
       res.json(data);
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to activate integration' });
@@ -76,6 +79,7 @@ export function createMCPRouter(): Router {
   router.delete('/integrations/:id', async (req: Request, res: Response) => {
     try {
       const data = await removeIntegration(req.params.id as string);
+      eventBus.emit('integration-changed');
       res.json(data);
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to remove integration' });

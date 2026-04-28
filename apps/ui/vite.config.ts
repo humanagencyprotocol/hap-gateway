@@ -46,6 +46,12 @@ export default defineConfig({
         target: 'http://localhost:3402',
         changeOrigin: true,
       },
+      '/events': {
+        target: 'http://localhost:3402',
+        changeOrigin: true,
+        // SSE: disable proxy response buffering so event frames flush immediately.
+        ws: false,
+      },
     },
   },
 });

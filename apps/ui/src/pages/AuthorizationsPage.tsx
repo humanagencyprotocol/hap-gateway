@@ -10,6 +10,7 @@ import { TTLBadge } from '../components/TTLBadge';
 import { EmptyState } from '../components/EmptyState';
 import { ExtendAuthModal } from '../components/ExtendAuthModal';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
+import { useSSEEvent } from '../contexts/EventSourceContext';
 
 type StatusFilter = 'active' | 'pending' | 'expired' | 'revoked';
 type Status = 'active' | 'pending' | 'expired' | 'revoked';
@@ -74,7 +75,10 @@ export function AuthorizationsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useVisiblePolling(fetchItems, 120_000);
+  // SSE-driven refresh: fire immediately on attestation changes (new, revoked, extended).
+  useSSEEvent('attestation-changed', fetchItems);
+  // Fallback full-sync every 5min in case of missed events (reconnect race, etc.).
+  useVisiblePolling(fetchItems, 300_000);
 
   // When items load (or groupId changes), fetch profile-config for each unique
   // profileId we haven't resolved yet — but only in team mode.

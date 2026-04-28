@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { spClient, type IntegrationManifest, type McpIntegrationStatus } from '../lib/sp-client';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
+import { useSSEEvent } from './EventSourceContext';
 
 export type IntegrationState =
   | 'loading'      // haven't fetched yet
@@ -68,7 +69,10 @@ export function IntegrationStatusProvider({ children }: { children: ReactNode })
     }));
   }, []);
 
-  useVisiblePolling(refresh, 5_000);
+  // SSE-driven refresh: fire immediately when the server emits integration-changed.
+  useSSEEvent('integration-changed', refresh);
+  // Fallback full-sync every 5min — catches any events missed during reconnect races.
+  useVisiblePolling(refresh, 300_000);
 
   const entries: IntegrationEntry[] = useMemo(() => {
     const byId = new Map(raw.integrations.map(i => [i.id, i]));

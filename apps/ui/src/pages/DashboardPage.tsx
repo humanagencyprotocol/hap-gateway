@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { spClient, type PendingItem, type Proposal } from '../lib/sp-client';
 import { SetupGuide } from '../components/SetupGuide';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
+import { useSSEEvent } from '../contexts/EventSourceContext';
 import { useIntegrationStatus } from '../contexts/IntegrationStatusContext';
 import { Skeleton, SkeletonAttentionRow } from '../components/Skeleton';
 
@@ -43,10 +44,12 @@ export function DashboardPage() {
       .catch(() => setAiReady(true));
   }, [domain]);
 
-  // Poll non-integration data. Integration status comes from the shared
-  // IntegrationStatusContext (single source of truth across Sidebar /
-  // Dashboard / IntegrationsPage — no cross-view disagreement).
-  useVisiblePolling(refresh, 15_000, domain);
+  // SSE-driven refresh: fire on attestation, proposal, or team-membership changes.
+  useSSEEvent('attestation-changed', refresh);
+  useSSEEvent('proposal-added', refresh);
+  useSSEEvent('proposal-resolved', refresh);
+  // Fallback full-sync every 5min in case of missed events (reconnect race, etc.).
+  useVisiblePolling(refresh, 300_000, domain);
 
   const allReady = authsReady && proposalsReady && aiReady && integrationsReady;
 

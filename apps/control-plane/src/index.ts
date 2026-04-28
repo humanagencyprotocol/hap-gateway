@@ -23,6 +23,8 @@ import { pushGateContent, pushServiceCredentials, setInternalSecret, getManifest
 import { createMCPRouter } from './routes/mcp';
 import { createEncryptIntentRouter } from './routes/encrypt-intent';
 import { startUpdateChecker, getUpdateStatus, forceCheck } from './lib/update-checker';
+import { createEventsHandler } from './routes/events';
+import { eventBus } from './lib/event-bus';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
 const port = parseInt(process.env.HAP_CP_PORT ?? '3402', 10);
@@ -223,6 +225,9 @@ app.get('/auth/gmail/callback', (req: Request, res: Response) => {
 // ─── Protected routes — require X-API-Key ────────────────────────────────
 
 const authGuard = requireAuth(vault);
+
+// SSE event stream — auth-guarded, long-lived connection
+app.get('/events', authGuard, createEventsHandler());
 
 // Vault routes
 app.use('/vault', jsonParser, authGuard, createVaultRouter(vault));
@@ -483,6 +488,38 @@ app.use(
         const cookie = vault.getSpCookie();
         if (cookie) {
           proxyReq.setHeader('Cookie', cookie);
+        }
+      },
+      proxyRes: (proxyRes, req) => {
+        // Emit bus events for mutating SP calls so SSE clients get push updates.
+        // Only fire on successful (2xx) responses.
+        const status = proxyRes.statusCode ?? 0;
+        if (status < 200 || status >= 300) return;
+
+        const method = (req as Request).method?.toUpperCase();
+        const url = (req as Request).url ?? '';
+
+        if (method !== 'POST' && method !== 'DELETE') return;
+
+        // Normalise URL to just the path (strip query string)
+        const path = url.split('?')[0];
+
+        if (method === 'POST' && path === '/api/sp/attest') {
+          eventBus.emit('attestation-changed');
+        } else if (method === 'POST' && /^\/api\/attestations\/[^/]+\/revoke$/.test(path)) {
+          eventBus.emit('attestation-changed');
+        } else if (method === 'POST' && path === '/api/proposals') {
+          eventBus.emit('proposal-added');
+        } else if (method === 'POST' && /^\/api\/proposals\/[^/]+\/resolve$/.test(path)) {
+          eventBus.emit('proposal-resolved');
+        } else if (
+          method === 'POST' && (
+            path === '/api/groups' ||
+            path === '/api/groups/join' ||
+            /^\/api\/groups\/[^/]+\/(leave|disable|reactivate|admin-transfer)$/.test(path)
+          )
+        ) {
+          eventBus.emit('team-membership-changed');
         }
       },
     },
