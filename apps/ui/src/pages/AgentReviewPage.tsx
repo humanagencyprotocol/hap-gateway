@@ -7,6 +7,7 @@ import { StepIndicator } from '../components/StepIndicator';
 import { DomainBadge } from '../components/DomainBadge';
 import { profileDisplayName } from '../lib/profile-display';
 import type { AgentProfile, AgentBoundsParams, AgentContextParams } from '@hap/core';
+import type { ProfileConfig } from '../lib/sp-client';
 
 interface GateData {
   bounds: AgentBoundsParams;
@@ -41,6 +42,10 @@ export function AgentReviewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<{ frameHash: string; status: string; commitment: string } | null>(null);
+  // Profile-config + resolved approver display names — surfaced as a Review row
+  // so the creator sees who the authority is being shared with before signing.
+  const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
+  const [approverNames, setApproverNames] = useState<string[]>([]);
 
   useEffect(() => {
     const authStored = sessionStorage.getItem('agentAuth');
@@ -95,6 +100,27 @@ export function AgentReviewPage() {
         }
       })
       .catch(() => {});
+
+    // Resolve profile-config + approver display names for the Review surface.
+    // Mirrors GateWizardPage so the creator sees the same people named both
+    // when they author the intent and when they sign.
+    if (auth.groupId) {
+      Promise.all([
+        spClient.getTeamProfileConfig(auth.groupId, auth.profileId).catch(() => null),
+        spClient.getGroupById(auth.groupId).catch(() => null),
+      ]).then(([config, groupData]) => {
+        setProfileConfig(config);
+        if (config && groupData) {
+          const memberMap = new Map(
+            (groupData as { members?: Array<{ id?: string; userId?: string; name?: string }> })
+              .members
+              ?.map(m => [m.id ?? m.userId ?? '', m.name ?? m.userId?.slice(0, 8) ?? 'Member']) ?? [],
+          );
+          const names = (config.approvers ?? []).map(id => memberMap.get(id) ?? id);
+          setApproverNames(names);
+        }
+      });
+    }
   }, [navigate]);
 
   const handleCommit = async () => {
@@ -254,6 +280,21 @@ export function AgentReviewPage() {
             <>
               <dt>Group</dt>
               <dd>{authData.groupName}</dd>
+            </>
+          )}
+          {(profileConfig?.approvers?.length ?? 0) > 0 && (
+            <>
+              <dt>Approvers</dt>
+              <dd>
+                {approverNames.length > 0 ? approverNames.join(', ') : profileConfig?.approvers.join(', ')}
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>
+                  {forcedReview
+                    ? 'Will review every action under this authority — your intent is encrypted for them.'
+                    : (profileConfig?.caps && Object.keys(profileConfig.caps).length > 0)
+                      ? 'Will review actions that exceed the team cap — your intent is encrypted for them.'
+                      : 'No caps set — they won’t gate any action, but your intent is encrypted and shared with them as an accountability record.'}
+                </div>
+              </dd>
             </>
           )}
           <dt>TTL</dt>

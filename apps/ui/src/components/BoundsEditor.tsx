@@ -422,12 +422,14 @@ function FieldRow({
 /**
  * Determine which zone we are in based on current bound values + profile config.
  * Returns one of:
- *   'no-config'      — profileConfig is null/undefined; render as today
- *   'within-cap'     — all bounds are at or below every configured cap
- *   'above-approvers'— at least one bound exceeds its cap, AND approvers are set
- *   'hard-ceiling'   — at least one bound exceeds its cap, AND no approvers
+ *   'no-config'         — profileConfig is null/undefined; render as today
+ *   'approvers-dormant' — approvers configured, no caps. Intent is still
+ *                          encrypted for them but they don't gate any action.
+ *   'within-cap'        — caps configured, all bounds at or below every cap
+ *   'above-approvers'   — at least one bound exceeds its cap, AND approvers set
+ *   'hard-ceiling'      — at least one bound exceeds its cap, AND no approvers
  */
-type CapZone = 'no-config' | 'within-cap' | 'above-approvers' | 'hard-ceiling';
+type CapZone = 'no-config' | 'approvers-dormant' | 'within-cap' | 'above-approvers' | 'hard-ceiling';
 
 function computeCapZone(
   boundsValues: Record<string, string>,
@@ -435,7 +437,14 @@ function computeCapZone(
 ): CapZone {
   if (!profileConfig) return 'no-config';
   const caps = profileConfig.caps;
-  if (!caps || Object.keys(caps).length === 0) return 'within-cap';
+  const hasApprovers = profileConfig.approvers.length > 0;
+  const hasCaps = caps && Object.keys(caps).length > 0;
+
+  if (!hasCaps) {
+    // No caps configured: the only opt-in left is approvers + intent
+    // encryption. If neither, render as today.
+    return hasApprovers ? 'approvers-dormant' : 'no-config';
+  }
 
   let anyViolating = false;
   for (const [key, cap] of Object.entries(caps)) {
@@ -448,7 +457,7 @@ function computeCapZone(
     }
   }
   if (!anyViolating) return 'within-cap';
-  return profileConfig.approvers.length > 0 ? 'above-approvers' : 'hard-ceiling';
+  return hasApprovers ? 'above-approvers' : 'hard-ceiling';
 }
 
 /** Returns the set of bound keys that currently violate their cap. */
@@ -637,6 +646,31 @@ export function BoundsEditor({
 
   const renderZoneFooter = () => {
     if (zone === 'no-config') return null;
+
+    if (zone === 'approvers-dormant') {
+      const names = (approverNames && approverNames.length > 0) ? approverNames.join(', ') : 'the configured approvers';
+      return (
+        <div style={{
+          marginTop: '0.75rem',
+          padding: '0.75rem 1rem',
+          border: '1px solid var(--accent)',
+          borderRadius: '0.375rem',
+          background: 'var(--bg-elevated)',
+          fontSize: '0.82rem',
+        }}>
+          <div style={{ fontWeight: 600, color: 'var(--accent)', marginBottom: '0.25rem' }}>
+            Profile approvers: {names}
+          </div>
+          <div>
+            No caps are set on this profile, so {names} won&apos;t gate any
+            action under this authority. Your intent will still be encrypted
+            and shared with them as an accountability record &mdash; they can
+            read what you authorised, even though they aren&apos;t reviewing
+            individual actions.
+          </div>
+        </div>
+      );
+    }
 
     if (zone === 'within-cap') {
       return (

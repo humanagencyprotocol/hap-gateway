@@ -180,19 +180,24 @@ export function GateWizardPage() {
             <li><strong>Watch out</strong> — What should the agent avoid or be careful about?</li>
           </ul>
 
-          {/* Intent-encryption notice — shown whenever the profile has approvers configured */}
+          {/* Intent-encryption notice — shown whenever the profile has approvers configured.
+              Names the approvers explicitly so the creator knows exactly who can read this. */}
           {(profileConfig?.approvers?.length ?? 0) > 0 && (
             <div style={{
-              padding: '0.65rem 0.875rem',
-              border: '1px solid var(--border)',
+              padding: '0.75rem 0.875rem',
+              border: '1px solid var(--accent)',
               borderRadius: '0.375rem',
               background: 'var(--bg-elevated)',
-              fontSize: '0.8rem',
+              fontSize: '0.82rem',
               marginBottom: '0.75rem',
               lineHeight: 1.55,
             }}>
-              Your intent will be encrypted and shared with this profile's required approvers.
-              Only they can decrypt it — your Service Provider cannot.
+              <div style={{ fontWeight: 600, color: 'var(--accent)', marginBottom: '0.25rem' }}>
+                Visible to {approverNames.length > 0 ? approverNames.join(', ') : 'the configured approvers'}
+              </div>
+              Your intent will be encrypted and shared with{' '}
+              {approverNames.length > 0 ? approverNames.join(', ') : 'this profile\'s required approvers'}.
+              Only they can decrypt it &mdash; your Service Provider cannot.
               Each approver stores a copy as their accountability record.
             </div>
           )}
