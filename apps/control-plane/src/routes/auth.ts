@@ -32,6 +32,7 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
    */
   router.post('/login', loginRateLimit, async (req: Request, res: Response) => {
     const apiKey = (req.headers['x-api-key'] as string) || (req.body as { apiKey?: string })?.apiKey;
+    const confirmWipe = (req.body as { confirmWipe?: boolean })?.confirmWipe === true;
     if (!apiKey) {
       res.status(400).json({ error: 'Missing API key (X-API-Key header or body.apiKey)' });
       return;
@@ -60,9 +61,31 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
       // Derive vault encryption key from API key
       vault.deriveAndSetKey(apiKey);
 
-      // Check if vault belongs to a different user — if so, wipe and start fresh
+      // Vault encryption key is derived from the API key. Logging in with a
+      // different API key on the same gateway means the existing vault
+      // contents (service credentials, integrations, E2EE keypair, gates)
+      // become unreadable and must be wiped. This is destructive — block on
+      // it until the UI has explicitly confirmed.
       if (vault.isVaultFromDifferentKey()) {
-        console.error('[Control Plane] Different user detected — wiping vault and stopping integrations');
+        if (!confirmWipe) {
+          // Build a summary of what would be lost so the UI can warn clearly.
+          const credentialIds = vault.listCredentials();
+          const services = vault.listServices();
+          // Drop the just-derived (wrong) key so subsequent calls don't
+          // accidentally encrypt anything against the new salt.
+          vault.clearKey();
+          res.status(409).json({
+            error: 'different_account',
+            wouldWipe: true,
+            summary: {
+              credentialCount: credentialIds.length,
+              serviceCount: services.length,
+              credentialIds,
+            },
+          });
+          return;
+        }
+        console.error('[Control Plane] Different user confirmed — wiping vault and stopping integrations');
         try {
           await stopAllIntegrations();
         } catch (err) {

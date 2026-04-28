@@ -18,7 +18,13 @@ interface AuthContextValue {
   activeMembership: GroupMember | null;
   isLoading: boolean;
   error: string;
-  login: (apiKey: string) => Promise<void>;
+  /**
+   * Log in with an API key. If the local vault belongs to a different
+   * account, throws `DifferentAccountError` (re-exported from sp-client).
+   * The caller should show a confirmation UI and retry with
+   * `{ confirmWipe: true }` to proceed.
+   */
+  login: (apiKey: string, opts?: { confirmWipe?: boolean }) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 
@@ -91,13 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [refreshGroups]);
 
-  const login = useCallback(async (apiKey: string) => {
+  const login = useCallback(async (apiKey: string, opts: { confirmWipe?: boolean } = {}) => {
     setIsLoading(true);
     setError('');
     try {
       spClient.setApiKey(apiKey);
       hasApiKey.current = true;
-      const u = await spClient.login(apiKey);
+      const u = await spClient.login(apiKey, opts);
       setUser(u);
 
       // Always seed the personal group so group_id is non-null for personal mode.

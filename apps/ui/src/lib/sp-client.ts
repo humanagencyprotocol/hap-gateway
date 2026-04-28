@@ -195,6 +195,26 @@ export interface ExecutionReceipt {
  * Per-profile team configuration (admin-set).
  * Mirrors hap-sp/src/lib/profile-config-store.ts — do not import from there.
  */
+export interface DifferentAccountSummary {
+  credentialCount: number;
+  serviceCount: number;
+  credentialIds: string[];
+}
+
+/**
+ * Thrown by spClient.login() when the new API key would wipe an existing
+ * vault that belongs to a different user. The caller is expected to confirm
+ * via UI and retry login with `{ confirmWipe: true }`.
+ */
+export class DifferentAccountError extends Error {
+  readonly summary: DifferentAccountSummary;
+  constructor(summary: DifferentAccountSummary) {
+    super('different_account');
+    this.name = 'DifferentAccountError';
+    this.summary = summary;
+  }
+}
+
 export interface ProfileConfig {
   /** userIds of required approvers for above-cap actions */
   approvers: string[];
@@ -236,11 +256,25 @@ class SPClient {
 
   // ─── Auth ─────────────────────────────────────────────────────────────
 
-  async login(apiKey: string): Promise<SPUser> {
+  /**
+   * Custom error for the "logging in with a different API key would wipe
+   * the local vault" case. The UI catches this and shows a confirmation
+   * modal listing the consequences before retrying with confirmWipe: true.
+   */
+  // (defined at module scope below — re-exported)
+
+  async login(apiKey: string, opts: { confirmWipe?: boolean } = {}): Promise<SPUser> {
     const res = await this.fetch('/auth/login', {
       method: 'POST',
-      headers: { 'X-API-Key': apiKey },
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmWipe: opts.confirmWipe === true }),
     });
+    if (res.status === 409) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.wouldWipe) {
+        throw new DifferentAccountError(data.summary ?? { credentialCount: 0, serviceCount: 0, credentialIds: [] });
+      }
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Invalid API key' }));
       throw new Error(err.error || `Login failed: ${res.status}`);
