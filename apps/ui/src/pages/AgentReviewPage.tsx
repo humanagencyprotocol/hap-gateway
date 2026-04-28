@@ -132,9 +132,10 @@ export function AgentReviewPage() {
     setSubmitting(true);
     setError('');
     try {
-      // Personal mode uses "owner" as the default domain; team mode uses the
-      // domain assigned to the user in their group.
-      const domain = authData.domain || authDomain;
+      // P4.6: domains are no longer a per-member primitive. Personal groups
+      // sign with 'owner'; team groups sign with the caller's userId. Trust
+      // the live AuthContext value over a possibly-stale sessionStorage one.
+      const domain = authDomain || authData.domain || 'owner';
 
       const boundsHash = await computeBoundsHashBrowser(gateData.bounds, profile);
       const contextHash = await computeContextHashBrowser(gateData.context, profile);
@@ -273,11 +274,9 @@ export function AgentReviewPage() {
             {profileDisplayName(authData.profileId)}
             <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>{authData.profileId}</div>
           </dd>
-          <dt>Domain</dt>
-          <dd>{authData.domain || authDomain}</dd>
           {authData.groupName && (
             <>
-              <dt>Group</dt>
+              <dt>Team</dt>
               <dd>{authData.groupName}</dd>
             </>
           )}

@@ -57,6 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // visibilitychange handler knows whether to fire refreshGroups.
   const hasApiKey = useRef(false);
 
+  // Track the latest userId so refreshGroups can read it synchronously
+  // without depending on the closure-captured `user` (which lags one tick
+  // behind setUser inside the same login() call).
+  const userIdRef = useRef<string | null>(null);
+
   /**
    * Fetches /api/groups/me, updates activeTeam + activeMembership,
    * and computes mode = activeMembership ? 'team' : 'personal'.
@@ -72,9 +77,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setActiveMembership(membership);
         setMode('team');
         setGroup(teamGroup);
-        // P4.6: team-group domain is the caller's userId (set by SP at attest time).
-        // Personal group domain stays 'owner' (set during login below).
-        const firstDomain = user?.id ?? membership.domains[0] ?? 'owner';
+        // P4.6: team-group domain is the caller's userId. Read from the
+        // ref so we get the latest value even if state hasn't propagated.
+        // Fallback to legacy membership.domains[0] is intentional — guards
+        // against any code path that could leave userIdRef unset.
+        const firstDomain = userIdRef.current ?? membership.domains[0] ?? 'owner';
         setDomain(firstDomain);
       } else {
         setActiveTeam(null);
@@ -107,6 +114,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasApiKey.current = true;
       const u = await spClient.login(apiKey, opts);
       setUser(u);
+      // Sync ref so refreshGroups (called below) reads the latest userId
+      // synchronously, before React has propagated the setUser update.
+      userIdRef.current = u.id;
 
       // Always seed the personal group so group_id is non-null for personal mode.
       // We call getGroups once to get the personal group, then refreshGroups to
@@ -132,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await spClient.logout();
     spClient.clearApiKey();
     hasApiKey.current = false;
+    userIdRef.current = null;
     setUser(null);
     setGroup(null);
     setDomain('');
