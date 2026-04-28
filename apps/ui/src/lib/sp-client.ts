@@ -293,6 +293,10 @@ class SPClient {
     ttl?: number;
     commitment_mode: 'automatic' | 'review';
     title?: string;
+    // Phase 5 — E2EE intent (all optional; if any present, all three required)
+    intent_ciphertext?: string;
+    encrypted_keys?: Record<string, { ct: string; enc: string }>;
+    approvers_frozen?: string[];
   }): Promise<AttestResponse> {
     const res = await this.fetch('/api/sp/attest', {
       method: 'POST',
@@ -597,6 +601,44 @@ class SPClient {
       const err = await res.json().catch(() => ({ error: 'Failed to set profile config' }));
       throw new Error((err as { error: string }).error || `setTeamProfileConfig failed: ${res.status}`);
     }
+  }
+
+  /**
+   * Encrypt an intent for a set of recipients via the control-plane.
+   * Calls POST /api/encrypt-intent (does not touch the SP; handled by CP).
+   */
+  async encryptIntent(
+    intent: string,
+    recipients: Array<{ userId: string; publicKey: string }>,
+  ): Promise<{
+    intentCiphertext: string;
+    encryptedKeys: Record<string, { ct: string; enc: string }>;
+    approversFrozen: string[];
+  }> {
+    const res = await this.fetch('/api/encrypt-intent', {
+      method: 'POST',
+      body: JSON.stringify({ intent, recipients }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Encryption failed' }));
+      throw new Error((err as { error: string }).error || `encryptIntent failed: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Fetch public keys for all current approvers on a profile.
+   * Returns an array of { userId, publicKey } — only users who have registered
+   * a key are included. Empty array = no approvers have keys (skip encryption).
+   * Endpoint: GET /api/groups/:id/profile-config/:profileId/approvers/pubkeys
+   */
+  async getApproversPubkeys(groupId: string, profileId: string): Promise<Array<{ userId: string; publicKey: string }>> {
+    const res = await this.fetch(
+      `/api/groups/${encodeURIComponent(groupId)}/profile-config/${encodeURIComponent(profileId)}/approvers/pubkeys`,
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.approvers as Array<{ userId: string; publicKey: string }>) ?? [];
   }
 
   /**

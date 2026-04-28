@@ -113,7 +113,7 @@ export function AgentReviewPage() {
       const boundsHash = await computeBoundsHashBrowser(gateData.bounds, profile);
       const contextHash = await computeContextHashBrowser(gateData.context, profile);
 
-      const [intentHash, ecHash] = await Promise.all([
+      const [intentHashValue, ecHash] = await Promise.all([
         hashGateContent(gateData.gateContent.intent),
         hashGateContent(JSON.stringify({
           profile: authData.profileId,
@@ -121,6 +121,30 @@ export function AgentReviewPage() {
           group: authData.groupId,
         })),
       ]);
+
+      // Phase 5 — Eager intent encryption.
+      // Fetch approver pubkeys regardless of forcedReview (eager: encrypt even
+      // within-cap when the profile has approvers, to handle "cap tightened later").
+      // If empty array returned, skip encryption.
+      let intentCiphertext: string | undefined;
+      let encryptedKeys: Record<string, { ct: string; enc: string }> | undefined;
+      let approversFrozen: string[] | undefined;
+
+      if (authData.isTeam) {
+        const approverPubkeys = await spClient.getApproversPubkeys(
+          authData.groupId,
+          authData.profileId,
+        );
+        if (approverPubkeys.length > 0) {
+          const encData = await spClient.encryptIntent(
+            gateData.gateContent.intent,
+            approverPubkeys,
+          );
+          intentCiphertext = encData.intentCiphertext;
+          encryptedKeys = encData.encryptedKeys;
+          approversFrozen = encData.approversFrozen;
+        }
+      }
 
       // Attest (creates the attestation on SP).
       // v0.4: commitment_mode is part of the signed payload. 'review' means
@@ -133,12 +157,16 @@ export function AgentReviewPage() {
         context_hash: contextHash,
         domain,
         did: user.did,
-        gate_content_hashes: { intent: intentHash },
+        gate_content_hashes: { intent: intentHashValue },
         execution_context_hash: ecHash,
         group_id: authData.groupId,
         ttl: ttlSeconds,
         commitment_mode: commitMode === 'per-action' ? 'review' : 'automatic',
         title: authTitle.trim(),
+        // Phase 5 — E2EE intent fields (undefined when no approvers)
+        intent_ciphertext: intentCiphertext,
+        encrypted_keys: encryptedKeys,
+        approvers_frozen: approversFrozen,
       });
 
       // Push gate content + context to MCP server (after attestation exists on SP)

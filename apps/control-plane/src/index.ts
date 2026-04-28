@@ -21,6 +21,7 @@ import { createAIRouter } from './routes/ai';
 import { requireAuth } from './middleware/auth';
 import { pushGateContent, pushServiceCredentials, setInternalSecret, getManifests, getGateContent, getBrief } from './lib/mcp-bridge';
 import { createMCPRouter } from './routes/mcp';
+import { createEncryptIntentRouter } from './routes/encrypt-intent';
 import { startUpdateChecker, getUpdateStatus, forceCheck } from './lib/update-checker';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
@@ -231,6 +232,9 @@ app.use('/ai', jsonParser, authGuard, createAIRouter(vault));
 
 // MCP integration management routes
 app.use('/mcp', jsonParser, authGuard, createMCPRouter());
+
+// E2EE intent encryption (P5.5)
+app.use('/api/encrypt-intent', jsonParser, authGuard, createEncryptIntentRouter());
 
 /**
  * GET /integrations/:id/discover/:field — wizard-only resource discovery.

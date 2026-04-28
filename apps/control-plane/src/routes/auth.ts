@@ -10,6 +10,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { configure, pushServiceCredentials, resyncGates, startPendingIntegrations, stopAllIntegrations } from '../lib/mcp-bridge';
 import type { Vault } from '../lib/vault';
+import { loadOrGenerateKeyPair, getPublicKey } from '../lib/e2e-key-manager';
 
 const SP_URL = process.env.HAP_SP_URL ?? 'https://www.humanagencyprotocol.com';
 
@@ -86,7 +87,7 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
       res.json(data);
 
       // Background: re-push credentials, trigger a pending-integrations retry,
-      // and re-sync gates (non-blocking).
+      // re-sync gates, and register the E2EE public key on the SP (non-blocking).
       //
       // The per-credential pushServiceCredentials path already fires
       // startIntegrationForService for integrations whose envKeys reference the
@@ -96,6 +97,48 @@ export function createAuthRouter(vault: Vault, logoutAuth: Middleware, loginRate
       // and starts everything that's resolvable now. Silently-skipped
       // integrations log their missing keys on the MCP side.
       (async () => {
+        // P5.3: Auto-register E2EE public key on the SP (idempotent).
+        try {
+          const kp = await loadOrGenerateKeyPair(vault);
+          const localPubkeyB64 = Buffer.from(kp.publicKey).toString('base64');
+
+          // Fetch currently registered key from SP and compare.
+          const spCookie = vault.getSpCookie();
+          const meKeyRes = await fetch(`${SP_URL}/api/users/me/pubkey`, {
+            headers: spCookie ? { Cookie: spCookie } : {},
+            signal: AbortSignal.timeout(5000),
+          });
+
+          let needsUpdate = false;
+          if (meKeyRes.status === 404) {
+            needsUpdate = true;
+          } else if (meKeyRes.ok) {
+            const meKeyData = await meKeyRes.json() as { pubkey?: string };
+            needsUpdate = meKeyData.pubkey !== localPubkeyB64;
+          }
+
+          if (needsUpdate) {
+            const putRes = await fetch(`${SP_URL}/api/users/me/pubkey`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(spCookie ? { Cookie: spCookie } : {}),
+              },
+              body: JSON.stringify({ pubkey: localPubkeyB64 }),
+              signal: AbortSignal.timeout(5000),
+            });
+            if (!putRes.ok) {
+              console.error(`[Control Plane] E2EE pubkey registration failed: ${putRes.status}`);
+            } else {
+              console.error('[Control Plane] E2EE pubkey registered with SP');
+            }
+          } else {
+            console.error('[Control Plane] E2EE pubkey already up to date');
+          }
+        } catch (err) {
+          console.error('[Control Plane] E2EE pubkey auto-register failed:', err);
+        }
+
         for (const credId of vault.listCredentials()) {
           try {
             const creds = vault.getCredential(credId);
