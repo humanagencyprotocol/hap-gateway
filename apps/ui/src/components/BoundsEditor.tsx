@@ -437,7 +437,9 @@ function computeCapZone(
 ): CapZone {
   if (!profileConfig) return 'no-config';
   const caps = profileConfig.caps;
-  const hasApprovers = profileConfig.approvers.length > 0;
+  // Defensive: legacy / partial records may be missing `approvers`. Treat
+  // missing or non-array as "no approvers".
+  const hasApprovers = Array.isArray(profileConfig.approvers) && profileConfig.approvers.length > 0;
   const hasCaps = caps && Object.keys(caps).length > 0;
 
   if (!hasCaps) {
