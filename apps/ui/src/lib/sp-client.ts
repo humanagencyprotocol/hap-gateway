@@ -464,6 +464,18 @@ class SPClient {
     return data.group ? { group: data.group, membership: data.membership } : null;
   }
 
+  /**
+   * List all users known to the SP. Used to resolve approver display names
+   * when the per-group members endpoint isn't enriched. Returns minimal
+   * profile info ({ id, name, email, did }).
+   */
+  async listUsers(): Promise<Array<{ id: string; name: string; email: string; did?: string }>> {
+    const res = await this.fetch('/api/users');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.users ?? [];
+  }
+
   async setPubkey(pubkey: string): Promise<void> {
     const res = await this.fetch('/api/users/me/pubkey', {
       method: 'PUT',

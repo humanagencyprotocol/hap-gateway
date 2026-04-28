@@ -57,20 +57,36 @@ export function GateWizardPage() {
     // Fetch team profile config when in team mode
     if (data.groupId) {
       Promise.all([
-        spClient.getTeamProfileConfig(data.groupId, data.profileId)
-          .catch(() => null),
-        spClient.getGroupById(data.groupId)
-          .catch(() => null),
-      ]).then(([config, groupData]) => {
+        spClient.getTeamProfileConfig(data.groupId, data.profileId).catch(() => null),
+        spClient.getGroupById(data.groupId).catch(() => null),
+        spClient.listUsers().catch(() => []),
+      ]).then(([config, groupData, users]) => {
         setProfileConfig(config);
-        if (config && groupData) {
-          // Resolve approver display names from group member list
-          const memberMap = new Map(groupData.members.map(m => [m.id, m.name]));
-          const names = (config.approvers ?? []).map(id => memberMap.get(id) ?? id);
+        if (config) {
+          // Layered name resolution: enriched group members first (when SP
+          // is freshly deployed), global users list fallback (works on
+          // older SP deployments).
+          const map = new Map<string, string>();
+          for (const u of users) {
+            const label = u.name && u.email ? `${u.name} (${u.email})` : (u.name || u.email || u.id);
+            map.set(u.id, label);
+          }
+          const groupMembers =
+            (groupData as { members?: Array<{ userId?: string; id?: string; name?: string; email?: string; role?: string }> })?.members ?? [];
+          for (const m of groupMembers) {
+            const id = m.userId ?? m.id;
+            if (!id) continue;
+            if (m.name && m.email) map.set(id, `${m.name} (${m.email})`);
+            else if (m.name) map.set(id, m.name);
+          }
+          const names = (config.approvers ?? []).map(id => map.get(id) ?? id);
           setApproverNames(names);
-          // Admin = member with role 'admin'
-          const admin = groupData.members.find(m => m.role === 'admin');
-          setAdminName(admin?.name);
+          // Admin display name — used by the hard-ceiling footer in BoundsEditor.
+          const adminEntry = groupMembers.find(m => m.role === 'admin');
+          if (adminEntry) {
+            const adminId = adminEntry.userId ?? adminEntry.id;
+            if (adminId) setAdminName(map.get(adminId) ?? adminEntry.name);
+          }
         }
       });
     }

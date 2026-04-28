@@ -111,15 +111,29 @@ export function AgentReviewPage() {
       Promise.all([
         spClient.getTeamProfileConfig(auth.groupId, auth.profileId).catch(() => null),
         spClient.getGroupById(auth.groupId).catch(() => null),
-      ]).then(([config, groupData]) => {
+        spClient.listUsers().catch(() => []),
+      ]).then(([config, groupData, users]) => {
         setProfileConfig(config);
-        if (config && groupData) {
-          const memberMap = new Map(
-            (groupData as { members?: Array<{ id?: string; userId?: string; name?: string }> })
-              .members
-              ?.map(m => [m.id ?? m.userId ?? '', m.name ?? m.userId?.slice(0, 8) ?? 'Member']) ?? [],
-          );
-          const names = (config.approvers ?? []).map(id => memberMap.get(id) ?? id);
+        if (config) {
+          // Build a userId → display string map. Prefer enriched per-group
+          // members (works on freshly-deployed SP), fall back to the global
+          // user list (works on older SP deployments — same data, looser
+          // privacy scope, but already public via /api/users).
+          const map = new Map<string, string>();
+          for (const u of users) {
+            const label = u.name && u.email ? `${u.name} (${u.email})` : (u.name || u.email || u.id);
+            map.set(u.id, label);
+          }
+          const groupMembers =
+            (groupData as { members?: Array<{ userId?: string; id?: string; name?: string; email?: string }> })?.members ?? [];
+          for (const m of groupMembers) {
+            const id = m.userId ?? m.id;
+            if (!id) continue;
+            if (m.name && m.email) map.set(id, `${m.name} (${m.email})`);
+            else if (m.name) map.set(id, m.name);
+            // else leave whatever listUsers gave us
+          }
+          const names = (config.approvers ?? []).map(id => map.get(id) ?? id);
           setApproverNames(names);
         }
       }).finally(() => {
