@@ -616,7 +616,10 @@ class SPClient {
     );
     if (res.status === 404) return null;
     if (!res.ok) return null;
-    return res.json();
+    // SP wraps the config in { profileId, config } — unwrap it to match
+    // the ProfileConfig type the rest of the gateway expects.
+    const body = await res.json();
+    return (body?.config as ProfileConfig) ?? null;
   }
 
   /**
