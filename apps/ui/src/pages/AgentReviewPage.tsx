@@ -46,6 +46,9 @@ export function AgentReviewPage() {
   // so the creator sees who the authority is being shared with before signing.
   const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
   const [approverNames, setApproverNames] = useState<string[]>([]);
+  // Track whether the profile-config fetch has completed so the Approvers
+  // row can distinguish "loading" from "no approvers configured".
+  const [profileConfigLoaded, setProfileConfigLoaded] = useState(false);
 
   useEffect(() => {
     const authStored = sessionStorage.getItem('agentAuth');
@@ -119,7 +122,13 @@ export function AgentReviewPage() {
           const names = (config.approvers ?? []).map(id => memberMap.get(id) ?? id);
           setApproverNames(names);
         }
+      }).finally(() => {
+        setProfileConfigLoaded(true);
       });
+    } else {
+      // Personal mode — no profile-config concept; mark loaded so UI can
+      // render the "no approvers" state without spinning.
+      setProfileConfigLoaded(true);
     }
   }, [navigate]);
 
@@ -280,18 +289,34 @@ export function AgentReviewPage() {
               <dd>{authData.groupName}</dd>
             </>
           )}
-          {(profileConfig?.approvers?.length ?? 0) > 0 && (
+          {/* Approvers row — always visible in team mode so the creator
+              knows whether anyone else can read their intent. Hidden only
+              for personal-mode (groupId absent) where it's never relevant. */}
+          {authData.groupId && (
             <>
               <dt>Approvers</dt>
               <dd>
-                {approverNames.length > 0 ? approverNames.join(', ') : profileConfig?.approvers.join(', ')}
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>
-                  {forcedReview
-                    ? 'Will review every action under this authority — your intent is encrypted for them.'
-                    : (profileConfig?.caps && Object.keys(profileConfig.caps).length > 0)
-                      ? 'Will review actions that exceed the team cap — your intent is encrypted for them.'
-                      : 'No caps set — they won’t gate any action, but your intent is encrypted and shared with them as an accountability record.'}
-                </div>
+                {!profileConfigLoaded ? (
+                  <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+                ) : (profileConfig?.approvers?.length ?? 0) === 0 ? (
+                  <>
+                    <span style={{ color: 'var(--text-tertiary)' }}>None &mdash; solo authorization</span>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>
+                      No approvers configured for this profile in this team. Your intent stays on your gateway.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {approverNames.length > 0 ? approverNames.join(', ') : profileConfig?.approvers.join(', ')}
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>
+                      {forcedReview
+                        ? 'Will review every action under this authority — your intent is encrypted for them.'
+                        : (profileConfig?.caps && Object.keys(profileConfig.caps).length > 0)
+                          ? 'Will review actions that exceed the team cap — your intent is encrypted for them.'
+                          : 'No caps set — they won’t gate any action, but your intent is encrypted and shared with them as an accountability record.'}
+                    </div>
+                  </>
+                )}
               </dd>
             </>
           )}
