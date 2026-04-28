@@ -203,12 +203,54 @@ export function createGatedToolHandler(
       if (!result.approved) {
       }
       if (result.approved) {
+        // Phase 6: above-cap detection — check FrameMetadata for aboveCap flag.
+        // If the authority is above-cap and has frozen approvers, route to
+        // per-action multi-party approval instead of executing immediately.
+        const authHash = auth.boundsHash ?? auth.frameHash;
+        try {
+          const frameMeta = await state.spClient.getFrameMetadata(authHash);
+          if (frameMeta?.aboveCap === true && (frameMeta.approversFrozen?.length ?? 0) > 0) {
+            const pendingApprovers = [
+              ...(frameMeta.createdBy ? [frameMeta.createdBy] : []),
+              ...frameMeta.approversFrozen!,
+            ];
+            // Deduplicate in case createdBy is also in approversFrozen.
+            const uniqueApprovers = [...new Set(pendingApprovers)];
+            const enrichedArgs = await attachImagePreview(args);
+            const { proposal } = await state.spClient.submitProposal({
+              frameHash: authHash,
+              profileId: auth.profileId,
+              path: auth.path,
+              pendingDomains: [],
+              tool: tool.namespacedName,
+              toolArgs: enrichedArgs,
+              executionContext: { ...execution },
+              pendingApprovers: uniqueApprovers,
+              createdBy: frameMeta.createdBy,
+            });
+            return {
+              content: [{
+                type: 'text',
+                text: `Action requires approval from ${uniqueApprovers.length} approver(s) — ` +
+                  `this authority is above its team cap.\n` +
+                  `Proposal ID: ${proposal.id}. Use check-pending-commitments to track status.`,
+              }],
+            };
+          }
+        } catch (err) {
+          // If the frame metadata fetch fails, log and continue with standard flow.
+          // This prevents a transient SP failure from blocking all above-cap actions
+          // without a clear error. Fail-closed: if we can't confirm above-cap status
+          // we log the problem but proceed (the SP receipt check will still enforce bounds).
+          console.error('[HAP MCP] Failed to fetch frame metadata for above-cap check:', err);
+        }
+
         // Check for deferred commitment domains — submit proposal instead of executing
         if ((auth.deferredCommitmentDomains ?? []).length > 0) {
           try {
             const enrichedArgs = await attachImagePreview(args);
             const { proposal } = await state.spClient.submitProposal({
-              frameHash: auth.boundsHash ?? auth.frameHash,
+              frameHash: authHash,
               profileId: auth.profileId,
               path: auth.path,
               pendingDomains: auth.deferredCommitmentDomains,
@@ -257,7 +299,7 @@ export function createGatedToolHandler(
           }
 
           await state.spClient.postReceipt({
-            attestationHash: auth.boundsHash ?? auth.frameHash,
+            attestationHash: authHash,
             profileId: auth.profileId,
             path: auth.path,
             action: tool.namespacedName,

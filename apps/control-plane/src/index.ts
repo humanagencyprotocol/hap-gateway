@@ -18,10 +18,12 @@ import { Vault } from './lib/vault';
 import { createAuthRouter } from './routes/auth';
 import { createVaultRouter } from './routes/vault';
 import { createAIRouter } from './routes/ai';
-import { requireAuth } from './middleware/auth';
+import { requireAuth, requireAuthQueryOrHeader } from './middleware/auth';
 import { pushGateContent, pushServiceCredentials, setInternalSecret, getManifests, getGateContent, getBrief } from './lib/mcp-bridge';
 import { createMCPRouter } from './routes/mcp';
 import { createEncryptIntentRouter } from './routes/encrypt-intent';
+import { createDecryptIntentRouter } from './routes/decrypt-intent';
+import { createApprovedIntentsRouter } from './routes/approved-intents';
 import { startUpdateChecker, getUpdateStatus, forceCheck } from './lib/update-checker';
 import { createEventsHandler } from './routes/events';
 import { eventBus } from './lib/event-bus';
@@ -227,7 +229,9 @@ app.get('/auth/gmail/callback', (req: Request, res: Response) => {
 const authGuard = requireAuth(vault);
 
 // SSE event stream — auth-guarded, long-lived connection
-app.get('/events', authGuard, createEventsHandler());
+// /events is reached by EventSource which can't send custom headers — use the
+// query-string variant of the auth middleware so the API key can ride in ?key=.
+app.get('/events', requireAuthQueryOrHeader(vault), createEventsHandler());
 
 // Vault routes
 app.use('/vault', jsonParser, authGuard, createVaultRouter(vault));
@@ -240,6 +244,12 @@ app.use('/mcp', jsonParser, authGuard, createMCPRouter());
 
 // E2EE intent encryption (P5.5)
 app.use('/api/encrypt-intent', jsonParser, authGuard, createEncryptIntentRouter());
+
+// E2EE intent decryption (P6.4) — approver-side, uses vault private key
+app.use('/api/decrypt-intent', jsonParser, authGuard, createDecryptIntentRouter(vault));
+
+// Approved intents local store (P6.4) — approver accountability record
+app.use('/api/approved-intents', jsonParser, authGuard, createApprovedIntentsRouter(vault));
 
 /**
  * GET /integrations/:id/discover/:field — wizard-only resource discovery.
@@ -512,6 +522,10 @@ app.use(
           eventBus.emit('proposal-added');
         } else if (method === 'POST' && /^\/api\/proposals\/[^/]+\/resolve$/.test(path)) {
           eventBus.emit('proposal-resolved');
+        } else if (method === 'POST' && /^\/api\/proposals\/[^/]+\/approve$/.test(path)) {
+          eventBus.emit('proposal-approved');
+        } else if (method === 'POST' && /^\/api\/proposals\/[^/]+\/reject$/.test(path)) {
+          eventBus.emit('proposal-rejected');
         } else if (
           method === 'POST' && (
             path === '/api/groups' ||

@@ -41,6 +41,22 @@ export interface SPProposal {
   executionResult: unknown | null;
   createdAt: number;
   expiresAt: number;
+  // Phase 6 fields
+  pendingApprovers?: string[];
+  approvedBy?: Record<string, { receiptId: string; at: number }>;
+  approverRejectedBy?: { userId: string; reason?: string; at: number };
+  createdBy?: string;
+}
+
+/** Phase 6: FrameMetadata as returned from SP, used for above-cap detection. */
+export interface SPFrameMetadata {
+  frameHash: string;
+  boundsHash?: string;
+  profileId: string;
+  aboveCap?: boolean;
+  approversFrozen?: string[];
+  createdBy?: string;
+  groupId?: string | null;
 }
 
 export interface SPPendingItem {
@@ -182,6 +198,7 @@ export class SPClient {
 
   /**
    * Submit a proposal for deferred commitment review.
+   * Phase 6: accepts optional pendingApprovers and createdBy for above-cap routing.
    */
   async submitProposal(data: {
     frameHash: string;
@@ -191,6 +208,9 @@ export class SPClient {
     tool: string;
     toolArgs: Record<string, unknown>;
     executionContext: Record<string, string | number>;
+    // Phase 6
+    pendingApprovers?: string[];
+    createdBy?: string;
   }): Promise<{ proposal: SPProposal }> {
     const res = await this.fetch('/api/proposals', {
       method: 'POST',
@@ -202,6 +222,11 @@ export class SPClient {
         tool: data.tool,
         tool_args: data.toolArgs,
         execution_context: data.executionContext,
+        // Phase 6
+        ...(data.pendingApprovers && data.pendingApprovers.length > 0
+          ? { pending_approvers: data.pendingApprovers }
+          : {}),
+        ...(data.createdBy ? { created_by: data.createdBy } : {}),
       }),
     });
     if (!res.ok) {
@@ -209,6 +234,17 @@ export class SPClient {
       throw new Error((body.error as string) ?? `SP proposal submission failed: ${res.status}`);
     }
     return res.json() as Promise<{ proposal: SPProposal }>;
+  }
+
+  /**
+   * Phase 6: Fetch frame metadata for an authority by its boundsHash / frameHash.
+   * Used to read aboveCap and approversFrozen at action time.
+   */
+  async getFrameMetadata(frameHash: string): Promise<SPFrameMetadata | null> {
+    const res = await this.fetch(`/api/sp/frame/${encodeURIComponent(frameHash)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    return res.json() as Promise<SPFrameMetadata>;
   }
 
   /**

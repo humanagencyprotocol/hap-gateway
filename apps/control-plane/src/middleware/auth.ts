@@ -18,3 +18,22 @@ export function requireAuth(vault: Vault) {
     next();
   };
 }
+
+/**
+ * Variant of requireAuth that also accepts the API key via the `?key=` query
+ * parameter. Used for the SSE /events route — native EventSource cannot send
+ * custom headers, so we have to allow the key through the URL. Localhost-only
+ * gateway architecture means the key isn't crossing untrusted networks.
+ */
+export function requireAuthQueryOrHeader(vault: Vault) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const headerKey = req.headers['x-api-key'] as string | undefined;
+    const queryKey = typeof req.query.key === 'string' ? req.query.key : undefined;
+    const apiKey = headerKey ?? queryKey;
+    if (!apiKey || !vault.isUnlocked() || !vault.validateApiKey(apiKey)) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    next();
+  };
+}

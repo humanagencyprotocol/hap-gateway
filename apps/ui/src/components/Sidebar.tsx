@@ -36,10 +36,11 @@ function useOtherNavStatus() {
 
   const poll = useCallback(async () => {
     try {
-      const [aiStatus, authData, proposalData, briefText] = await Promise.all([
+      const [aiStatus, authData, proposalData, approverProposals, briefText] = await Promise.all([
         spClient.getCredential('ai-config').catch(() => null),
         spClient.getMyAttestations().catch(() => null),
         spClient.getProposals(activeDomain || 'owner').catch(() => null),
+        spClient.getProposalsForApprover().catch(() => null),
         spClient.getAgentContext().catch(() => ''),
       ]);
 
@@ -51,8 +52,12 @@ function useOtherNavStatus() {
         ).length;
         if (expired > 0) next.authorizations = expired;
       }
-      if (proposalData && proposalData.length > 0) {
-        next.proposals = proposalData.length;
+      // Combine domain proposals (legacy) + above-cap approver proposals (Phase 6).
+      const domainPending = (proposalData?.length ?? 0);
+      const approverPending = (approverProposals?.length ?? 0);
+      const totalPending = domainPending + approverPending;
+      if (totalPending > 0) {
+        next.proposals = totalPending;
       }
       // Empty agent brief → badge nudges the owner to author one.
       if (!briefText || !briefText.trim()) next.brief = 1;
@@ -66,6 +71,8 @@ function useOtherNavStatus() {
   useSSEEvent('attestation-changed', poll);
   useSSEEvent('proposal-added', poll);
   useSSEEvent('proposal-resolved', poll);
+  useSSEEvent('proposal-approved', poll);
+  useSSEEvent('proposal-rejected', poll);
   useSSEEvent('team-membership-changed', poll);
   // Fallback full-sync every 5min in case of missed events.
   useVisiblePolling(poll, 300_000, activeDomain);

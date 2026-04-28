@@ -16,7 +16,9 @@ export type EventType =
   | 'proposal-resolved'
   | 'team-membership-changed'
   | 'action-approval-needed'   // Phase 6
-  | 'action-resolved';          // Phase 6
+  | 'action-resolved'          // Phase 6
+  | 'proposal-approved'        // Phase 6: one approver signed off (not yet committed)
+  | 'proposal-rejected';       // Phase 6: one approver rejected
 
 export interface BusEvent {
   type: EventType;

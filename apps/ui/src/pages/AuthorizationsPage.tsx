@@ -403,6 +403,20 @@ export function AuthorizationsPage() {
               }
             }
             const isAboveCap = aboveCapByKey.size > 0;
+
+            // Phase 6: detect when the frozen approver list differs from the
+            // current profile-config approvers. If so, show the "Copy with new
+            // approvers" pill so the creator can re-issue with the updated list.
+            const frozenApprovers = item.approvers_frozen ?? [];
+            const currentApprovers = itemConfig?.approvers ?? [];
+            const approversDrifted =
+              mode === 'team' &&
+              frozenApprovers.length > 0 &&
+              currentApprovers.length > 0 &&
+              (frozenApprovers.length !== currentApprovers.length ||
+                frozenApprovers.some(uid => !currentApprovers.includes(uid)) ||
+                currentApprovers.some(uid => !frozenApprovers.includes(uid)));
+
             const escalationSummary = Array.from(aboveCapByKey.entries())
               .map(([k, r]) => `${k}: ${r.authorized} (cap ${r.cap})`)
               .join(', ');
@@ -487,6 +501,27 @@ export function AuthorizationsPage() {
                     >
                       {capPillText}
                     </span>
+                  )}
+                  {approversDrifted && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{
+                        fontSize: '0.65rem',
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '0.25rem',
+                        background: 'var(--warning-subtle, rgba(234,179,8,0.12))',
+                        color: 'var(--warning, #ca8a04)',
+                        fontWeight: 600,
+                        border: '1px solid var(--warning-border, rgba(234,179,8,0.3))',
+                        cursor: 'pointer',
+                        lineHeight: 1.4,
+                      }}
+                      onClick={() => handleCopy(item)}
+                      disabled={copyingHash === item.frame_hash}
+                      title="The approver list for this profile has changed since this authority was created. Copy to reissue with the current approvers."
+                    >
+                      {copyingHash === item.frame_hash ? 'Copying...' : 'Approver list updated · Copy with new approvers'}
+                    </button>
                   )}
                 </div>
 

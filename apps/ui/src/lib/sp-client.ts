@@ -68,6 +68,10 @@ export interface PendingItem {
   created_at: string;
   earliest_expiry: string | null;
   remaining_seconds: number | null;
+  /** Phase 6: frozen approver list at authority creation time. */
+  approvers_frozen: string[];
+  /** Phase 6: true when authority was created above a team cap. */
+  above_cap: boolean;
 }
 
 export interface AttestationsResult {
@@ -170,6 +174,11 @@ export interface Proposal {
   executionResult: unknown | null;
   createdAt: number;
   expiresAt: number;
+  // Phase 6 fields
+  pendingApprovers?: string[];
+  approvedBy?: Record<string, { receiptId: string; at: number }>;
+  approverRejectedBy?: { userId: string; reason?: string; at: number };
+  createdBy?: string;
 }
 
 export interface ExecutionReceipt {
@@ -241,6 +250,14 @@ class SPClient {
 
   clearApiKey(): void {
     this.apiKey = null;
+  }
+
+  /**
+   * Used by EventSource (which can't send custom headers) to authenticate the
+   * /events stream via a query-string token. Returns null if not logged in.
+   */
+  getApiKey(): string | null {
+    return this.apiKey;
   }
 
   private async fetch(path: string, init?: RequestInit): Promise<Response> {
@@ -369,6 +386,8 @@ class SPClient {
         (d: string) => !(a.attestedDomains as string[] ?? []).includes(d)
       ),
       deferred_commitment_domains: a.deferredCommitmentDomains ?? [],
+      approvers_frozen: (a.approversFrozen as string[]) ?? [],
+      above_cap: (a.aboveCap as boolean) ?? false,
       created_at: a.createdAt ? new Date((a.createdAt as number) * 1000).toISOString() : '',
       earliest_expiry: (a.attestations as Array<{expiresAt: number}> | undefined)?.length
         ? new Date(Math.min(...(a.attestations as Array<{expiresAt: number}>).map(att => att.expiresAt)) * 1000).toISOString()
@@ -724,6 +743,102 @@ class SPClient {
       throw new Error(err.error || `Failed: ${res.status}`);
     }
     return res.json();
+  }
+
+  // ─── Phase 6: Per-action approver proposals ─────────────────────────────
+
+  /**
+   * Fetch proposals where the caller is a required approver and has not yet approved.
+   * SP endpoint: GET /api/proposals?approver=me
+   */
+  async getProposalsForApprover(): Promise<Proposal[]> {
+    const res = await this.fetch('/api/proposals?approver=me');
+    if (!res.ok) throw new Error(`Failed to fetch approver proposals: ${res.status}`);
+    const data = await res.json();
+    return data.proposals ?? [];
+  }
+
+  /**
+   * Approve an above-cap action proposal.
+   * SP endpoint: POST /api/proposals/:id/approve
+   */
+  async approveProposal(id: string): Promise<{ receipt: Record<string, unknown>; status: string; approvedBy: Record<string, { receiptId: string; at: number }> }> {
+    const res = await this.fetch(`/api/proposals/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed' }));
+      throw new Error((err as { error: string }).error || `approveProposal failed: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Reject an above-cap action proposal.
+   * SP endpoint: POST /api/proposals/:id/reject
+   */
+  async rejectProposal(id: string, reason?: string): Promise<{ receipt: Record<string, unknown>; status: string }> {
+    const res = await this.fetch(`/api/proposals/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed' }));
+      throw new Error((err as { error: string }).error || `rejectProposal failed: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Fetch E2EE encrypted intent for an authority.
+   * Returns the bulk ciphertext + the caller's HPKE key wrap.
+   * SP endpoint: GET /api/attestations/:frameHash/intent
+   */
+  async getAttestationIntent(frameHash: string): Promise<{
+    intentCiphertext: string;
+    encryptedKey: { ct: string; enc: string };
+    approversFrozen: string[];
+  } | null> {
+    const res = await this.fetch(`/api/attestations/${encodeURIComponent(frameHash)}/intent`);
+    if (res.status === 404 || res.status === 403) return null;
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  /**
+   * Decrypt an intent on the control-plane using the vault's private HPKE key.
+   * CP endpoint: POST /api/decrypt-intent
+   */
+  async decryptIntent(params: {
+    intentCiphertext: string;
+    encryptedKey: { ct: string; enc: string };
+    approverId: string;
+  }): Promise<string> {
+    const res = await this.fetch('/api/decrypt-intent', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Decryption failed' }));
+      throw new Error((err as { error: string }).error || `decryptIntent failed: ${res.status}`);
+    }
+    const data = await res.json() as { intent: string };
+    return data.intent;
+  }
+
+  /**
+   * Persist a decrypted intent as an approver accountability record.
+   * CP endpoint: POST /api/approved-intents
+   */
+  async storeApprovedIntent(authorityId: string, intent: string): Promise<void> {
+    const res = await this.fetch('/api/approved-intents', {
+      method: 'POST',
+      body: JSON.stringify({ authorityId, intent }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed' }));
+      throw new Error((err as { error: string }).error || `storeApprovedIntent failed: ${res.status}`);
+    }
   }
 
   // ─── Action Thread (homepage feed) ──────────────────────────────────────

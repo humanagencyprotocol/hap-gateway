@@ -25,6 +25,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useAuth } from './AuthContext';
+import { spClient } from '../lib/sp-client';
 
 // ─── Event types (must mirror apps/control-plane/src/lib/event-bus.ts) ───────
 
@@ -35,7 +36,9 @@ export type SSEEventType =
   | 'proposal-resolved'
   | 'team-membership-changed'
   | 'action-approval-needed'
-  | 'action-resolved';
+  | 'action-resolved'
+  | 'proposal-approved'
+  | 'proposal-rejected';
 
 // ─── Context value ────────────────────────────────────────────────────────────
 
@@ -89,7 +92,12 @@ export function EventSourceProvider({ children }: { children: ReactNode }) {
     // Already open — nothing to do.
     if (esRef.current) return;
 
-    const es = new EventSource('/events');
+    // Native EventSource cannot send custom headers, so the API key has to
+    // ride in the URL. The control plane's /events route accepts ?key= as an
+    // alternative to the X-API-Key header (only on this route).
+    const apiKey = spClient.getApiKey();
+    if (!apiKey) return; // not yet logged in (race with auth state propagation)
+    const es = new EventSource(`/events?key=${encodeURIComponent(apiKey)}`);
     esRef.current = es;
 
     es.onopen = () => setConnected(true);
@@ -104,6 +112,8 @@ export function EventSourceProvider({ children }: { children: ReactNode }) {
       'team-membership-changed',
       'action-approval-needed',
       'action-resolved',
+      'proposal-approved',
+      'proposal-rejected',
     ];
 
     for (const type of eventTypes) {
