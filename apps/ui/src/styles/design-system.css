@@ -2361,3 +2361,73 @@ body.has-update-banner .main-content {
   border-color: var(--btn-primary-bg-hover);
   color: var(--btn-primary-fg);
 }
+
+/* ─── Skeleton loaders (LinkedIn / Vercel style) ───────────────────────────
+   A single .skeleton class produces an elevated block with a shimmer band
+   sweeping across it. Variants (.skeleton-line, .skeleton-title) set sane
+   defaults for text-shaped skeletons. */
+
+@keyframes hap-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  display: block;
+  position: relative;
+  border-radius: 0.375rem;
+  background-color: var(--bg-main);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 20%,
+    rgba(255, 255, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0.06) 80%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: hap-skeleton-shimmer 1.6s ease-in-out infinite;
+  will-change: background-position;
+}
+
+/* In light mode the shimmer band is a translucent darker pass, not lighter. */
+[data-theme="light"] .skeleton,
+:root:not([data-theme="dark"]) .skeleton {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.03) 20%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.03) 80%,
+    transparent 100%
+  );
+}
+
+.skeleton-title   { height: 1.5rem; width: 3rem; margin: 0 auto; }
+.skeleton-line    { height: 0.75rem; width: 100%; }
+.skeleton-line-sm { height: 0.65rem; width: 60%; }
+
+/* A full "skeleton card" — same elevation as .card, with skeleton content
+   inside. Used for attention-row placeholders. */
+.skeleton-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.skeleton-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background-image: none; }
+}

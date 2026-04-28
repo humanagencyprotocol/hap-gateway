@@ -5,6 +5,7 @@ import { spClient, type PendingItem, type Proposal } from '../lib/sp-client';
 import { SetupGuide } from '../components/SetupGuide';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { useIntegrationStatus } from '../contexts/IntegrationStatusContext';
+import { Skeleton, SkeletonAttentionRow } from '../components/Skeleton';
 
 const EXPIRY_WARN_SECONDS = 30 * 60; // 30 minutes
 
@@ -17,16 +18,29 @@ export function DashboardPage() {
   const [auths, setAuths] = useState<PendingItem[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [aiConfigured, setAiConfigured] = useState(true);
-  const [loadedOnce, setLoadedOnce] = useState(false);
+  // Per-section readiness. We used to gate the whole page on a single
+  // "loadedOnce || integrationsLoading" flag, which meant a slow SP call
+  // (cold Vercel lambda) held the spinner for seconds even though the
+  // local integration data was ready in ~100ms. Each card now reveals
+  // itself as soon as its own source resolves.
+  const [authsReady, setAuthsReady] = useState(false);
+  const [proposalsReady, setProposalsReady] = useState(false);
+  const [aiReady, setAiReady] = useState(false);
   const { entries: integrationEntries, activeSessions, loading: integrationsLoading } = useIntegrationStatus();
+  const integrationsReady = !integrationsLoading;
 
-  const refresh = useCallback(async () => {
-    await Promise.all([
-      spClient.getMyAttestations().then(setAuths).catch(() => {}),
-      spClient.getProposals(domain || 'owner').then(setProposals).catch(() => {}),
-      spClient.getCredential('ai-config').then(s => setAiConfigured(s.configured)).catch(() => {}),
-    ]);
-    setLoadedOnce(true);
+  const refresh = useCallback(() => {
+    // Fire-and-forget in parallel. Each call flips only its own ready flag,
+    // so a slow SP response doesn't delay the cards that finished fast.
+    spClient.getMyAttestations()
+      .then(v => { setAuths(v); setAuthsReady(true); })
+      .catch(() => setAuthsReady(true));
+    spClient.getProposals(domain || 'owner')
+      .then(v => { setProposals(v); setProposalsReady(true); })
+      .catch(() => setProposalsReady(true));
+    spClient.getCredential('ai-config')
+      .then(s => { setAiConfigured(s.configured); setAiReady(true); })
+      .catch(() => setAiReady(true));
   }, [domain]);
 
   // Poll non-integration data. Integration status comes from the shared
@@ -34,7 +48,7 @@ export function DashboardPage() {
   // Dashboard / IntegrationsPage — no cross-view disagreement).
   useVisiblePolling(refresh, 15_000, domain);
 
-  const loading = !loadedOnce || integrationsLoading;
+  const allReady = authsReady && proposalsReady && aiReady && integrationsReady;
 
   // Compute counts
   const active = auths.filter(a => a.remaining_seconds !== null && a.remaining_seconds > 0);
@@ -107,63 +121,75 @@ export function DashboardPage() {
     });
   }
 
-  if (loading) {
-    return (
-      <>
-        <div className="page-header">
-          <h1 className="page-title">Dashboard</h1>
-        </div>
-        <p style={{ color: 'var(--text-tertiary)' }}>Loading...</p>
-      </>
-    );
-  }
-
   return (
     <>
       <div className="page-header">
         <h1 className="page-title">Dashboard</h1>
       </div>
 
-      {/* Setup guide */}
-      <SetupGuide
-        aiConfigured={aiConfigured}
-        hasRunningIntegration={runningIntegrations.length > 0}
-        hasActiveAuth={active.length > 0}
-        hasAgentConnected={activeSessions > 0}
-        mcpEndpoint={`http://localhost:${window.location.port === '3400' ? '3430' : '7430'}`}
-      />
+      {/* Setup guide — gated on the data it reads. Rendering before auths,
+          ai config, and integrations have resolved caused a flicker: the
+          guide's default evaluation ("nothing is set up yet") made it visible
+          for a frame, then the real data flipped every step to "done" and it
+          vanished. Waiting for allReady means it either appears once with the
+          correct progress, or never appears at all for a fully-set-up user. */}
+      {allReady && (
+        <SetupGuide
+          aiConfigured={aiConfigured}
+          hasRunningIntegration={runningIntegrations.length > 0}
+          hasActiveAuth={active.length > 0}
+          hasAgentConnected={activeSessions > 0}
+          mcpEndpoint={`http://localhost:${window.location.port === '3400' ? '3430' : '7430'}`}
+        />
+      )}
 
       {/* Status bar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(8rem, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
         <Link to="/authorizations" style={{ textDecoration: 'none' }}>
           <div className="card" style={{ padding: '1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: active.length > 0 ? 'var(--success)' : 'var(--text-tertiary)' }}>
-              {active.length}
-            </div>
+            {authsReady ? (
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: active.length > 0 ? 'var(--success)' : 'var(--text-tertiary)' }}>
+                {active.length}
+              </div>
+            ) : (
+              <Skeleton variant="title" />
+            )}
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Active</div>
           </div>
         </Link>
         <Link to="/proposals" style={{ textDecoration: 'none' }}>
           <div className="card" style={{ padding: '1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: pendingProposals.length > 0 ? 'var(--warning)' : 'var(--text-tertiary)' }}>
-              {pendingProposals.length}
-            </div>
+            {proposalsReady ? (
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: pendingProposals.length > 0 ? 'var(--warning)' : 'var(--text-tertiary)' }}>
+                {pendingProposals.length}
+              </div>
+            ) : (
+              <Skeleton variant="title" />
+            )}
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Pending Approvals</div>
           </div>
         </Link>
         <Link to="/authorizations" style={{ textDecoration: 'none' }}>
           <div className="card" style={{ padding: '1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: expired.length > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }}>
-              {expired.length}
-            </div>
+            {authsReady ? (
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: expired.length > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }}>
+                {expired.length}
+              </div>
+            ) : (
+              <Skeleton variant="title" />
+            )}
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Expired</div>
           </div>
         </Link>
         <Link to="/integrations" style={{ textDecoration: 'none' }}>
           <div className="card" style={{ padding: '1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: runningIntegrations.length > 0 ? 'var(--success)' : 'var(--text-tertiary)' }}>
-              {runningIntegrations.length}
-            </div>
+            {integrationsReady ? (
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: runningIntegrations.length > 0 ? 'var(--success)' : 'var(--text-tertiary)' }}>
+                {runningIntegrations.length}
+              </div>
+            ) : (
+              <Skeleton variant="title" />
+            )}
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Integrations Running</div>
           </div>
         </Link>
@@ -191,9 +217,15 @@ export function DashboardPage() {
             </Link>
           ))}
         </div>
-      ) : (
+      ) : allReady ? (
         <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
           <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>All clear. Nothing needs your attention.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <SkeletonAttentionRow />
+          <SkeletonAttentionRow />
+          <SkeletonAttentionRow />
         </div>
       )}
     </>
