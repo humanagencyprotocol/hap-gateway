@@ -380,25 +380,45 @@ export function AuthorizationsPage() {
             const boundsEntries = Object.entries(item.frame)
               .filter(([k]) => k !== 'profile' && k !== 'path');
 
-            // Compute "reduced by team cap" — any bound authorized above current cap.
-            // Map by key so the bounds line below can mark each violator inline.
+            // Compute bounds that exceed the team cap. Semantics depend on
+            // whether approvers are configured:
+            //   - approvers configured  → escalation. Bounds remain
+            //     authorized at their original value; above-cap actions
+            //     require per-action approval at action time.
+            //   - no approvers          → hard cap. Bounds are effectively
+            //     reduced to the cap value (SP enforces at receipt time).
             const itemConfig = profileConfigCache.get(item.profile_id) ?? null;
-            const reducedByKey = new Map<string, { authorized: number; cap: number }>();
+            const hasApprovers = (itemConfig?.approvers?.length ?? 0) > 0;
+            const aboveCapByKey = new Map<string, { authorized: number; cap: number }>();
             if (itemConfig?.caps && mode === 'team') {
               for (const [k, v] of boundsEntries) {
                 const cap = itemConfig.caps[k];
                 if (cap !== undefined && Number(v) > cap) {
-                  reducedByKey.set(k, { authorized: Number(v), cap });
+                  aboveCapByKey.set(k, { authorized: Number(v), cap });
                 }
               }
             }
-            const isReduced = reducedByKey.size > 0;
-            const reducedSummary = isReduced
-              ? Array.from(reducedByKey.entries()).map(([k, r]) => `${k}: ${r.authorized} → ${r.cap}`).join(', ')
-              : '';
-            const reducedTooltip = isReduced
-              ? `Team cap reduces ${reducedByKey.size === 1 ? 'this bound' : `${reducedByKey.size} bounds`}: ${reducedSummary}. Ask the team admin to raise the cap, or copy this authorization to reissue.`
-              : undefined;
+            const isAboveCap = aboveCapByKey.size > 0;
+            const escalationSummary = Array.from(aboveCapByKey.entries())
+              .map(([k, r]) => `${k}: ${r.authorized} (cap ${r.cap})`)
+              .join(', ');
+            const reducedSummary = Array.from(aboveCapByKey.entries())
+              .map(([k, r]) => `${k}: ${r.authorized} → ${r.cap}`)
+              .join(', ');
+            const capPillText = !isAboveCap
+              ? ''
+              : hasApprovers
+                ? aboveCapByKey.size === 1
+                  ? `Above team cap: ${escalationSummary} — actions require approval`
+                  : `Above team cap (${aboveCapByKey.size}): ${escalationSummary} — actions require approval`
+                : aboveCapByKey.size === 1
+                  ? `Reduced by hard cap: ${reducedSummary}`
+                  : `Reduced by hard cap (${aboveCapByKey.size}): ${reducedSummary}`;
+            const capPillTooltip = !isAboveCap
+              ? undefined
+              : hasApprovers
+                ? `Above-cap actions under this authority require per-action approval from the profile's approvers. Bounds remain authorized at their original values.`
+                : `No approvers are configured for this profile, so the team cap is a hard ceiling. Bounds above the cap are effectively reduced to the cap. Ask the admin to raise the cap or add approvers, or copy this authorization to reissue within the cap.`;
 
             return (
               <div className="card" key={item.frame_hash} style={{ marginBottom: 0 }}>
@@ -446,22 +466,22 @@ export function AuthorizationsPage() {
                       Review Mode
                     </span>
                   )}
-                  {isReduced && (
+                  {isAboveCap && (
                     <span
-                      title={reducedTooltip}
+                      title={capPillTooltip}
                       style={{
                         fontSize: '0.65rem',
                         padding: '0.15rem 0.4rem',
                         borderRadius: '0.25rem',
-                        background: 'var(--danger-subtle)',
-                        color: 'var(--danger)',
+                        // Hard cap (no approvers) = danger color; escalation
+                        // (approvers configured) = warning/accent color.
+                        background: hasApprovers ? 'var(--accent-subtle)' : 'var(--danger-subtle)',
+                        color: hasApprovers ? 'var(--accent)' : 'var(--danger)',
                         fontWeight: 600,
                         cursor: 'help',
                       }}
                     >
-                      {reducedByKey.size === 1
-                        ? `Reduced by team cap: ${reducedSummary}`
-                        : `Reduced by team cap (${reducedByKey.size}): ${reducedSummary}`}
+                      {capPillText}
                     </span>
                   )}
                 </div>
@@ -469,17 +489,29 @@ export function AuthorizationsPage() {
                 {boundsEntries.length > 0 && (
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
                     {boundsEntries.map(([k, v], i) => {
-                      const r = reducedByKey.get(k);
+                      const r = aboveCapByKey.get(k);
                       return (
                         <span key={k}>
                           {i > 0 && ' · '}
                           {r ? (
-                            <span title={`Team cap on ${k} is ${r.cap}; authorized for ${r.authorized}; effective ${r.cap}.`}>
-                              <span style={{ textDecoration: 'line-through', color: 'var(--text-tertiary)' }}>{k}={String(v)}</span>
-                              <span style={{ color: 'var(--danger)', marginLeft: '0.25rem', fontWeight: 600 }}>
-                                {'→'} {r.cap}
+                            hasApprovers ? (
+                              // Escalation: bound NOT reduced. Show value
+                              // followed by "↑ approval at cap N" annotation.
+                              <span title={`Team cap on ${k} is ${r.cap}. Actions exceeding the cap require per-action approval. Bound remains authorized at ${r.authorized}.`}>
+                                <span style={{ color: 'var(--text-tertiary)' }}>{k}={String(v)}</span>
+                                <span style={{ color: 'var(--accent)', marginLeft: '0.25rem', fontWeight: 600 }}>
+                                  ↑ approval at {r.cap}
+                                </span>
                               </span>
-                            </span>
+                            ) : (
+                              // Hard cap: bound IS reduced. Strike through.
+                              <span title={`Team cap on ${k} is ${r.cap} with no approvers configured (hard cap). Authorized for ${r.authorized}; effective ${r.cap}.`}>
+                                <span style={{ textDecoration: 'line-through', color: 'var(--text-tertiary)' }}>{k}={String(v)}</span>
+                                <span style={{ color: 'var(--danger)', marginLeft: '0.25rem', fontWeight: 600 }}>
+                                  {'→'} {r.cap}
+                                </span>
+                              </span>
+                            )
                           ) : (
                             <span>{k}={String(v)}</span>
                           )}
