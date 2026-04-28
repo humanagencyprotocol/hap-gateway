@@ -380,20 +380,24 @@ export function AuthorizationsPage() {
             const boundsEntries = Object.entries(item.frame)
               .filter(([k]) => k !== 'profile' && k !== 'path');
 
-            // Compute "reduced by team cap" — any bound authorized above current cap
+            // Compute "reduced by team cap" — any bound authorized above current cap.
+            // Map by key so the bounds line below can mark each violator inline.
             const itemConfig = profileConfigCache.get(item.profile_id) ?? null;
-            const reducedBounds: Array<{ key: string; authorized: number; cap: number }> = [];
+            const reducedByKey = new Map<string, { authorized: number; cap: number }>();
             if (itemConfig?.caps && mode === 'team') {
               for (const [k, v] of boundsEntries) {
                 const cap = itemConfig.caps[k];
                 if (cap !== undefined && Number(v) > cap) {
-                  reducedBounds.push({ key: k, authorized: Number(v), cap });
+                  reducedByKey.set(k, { authorized: Number(v), cap });
                 }
               }
             }
-            const isReduced = reducedBounds.length > 0;
+            const isReduced = reducedByKey.size > 0;
+            const reducedSummary = isReduced
+              ? Array.from(reducedByKey.entries()).map(([k, r]) => `${k}: ${r.authorized} → ${r.cap}`).join(', ')
+              : '';
             const reducedTooltip = isReduced
-              ? `Authorized for ${reducedBounds[0].authorized}, team cap now ${reducedBounds[0].cap} — effective ${reducedBounds[0].cap}. Ask the team admin to raise the cap, or copy this authorization to reissue.`
+              ? `Team cap reduces ${reducedByKey.size === 1 ? 'this bound' : `${reducedByKey.size} bounds`}: ${reducedSummary}. Ask the team admin to raise the cap, or copy this authorization to reissue.`
               : undefined;
 
             return (
@@ -455,14 +459,33 @@ export function AuthorizationsPage() {
                         cursor: 'help',
                       }}
                     >
-                      Reduced by team cap
+                      {reducedByKey.size === 1
+                        ? `Reduced by team cap: ${reducedSummary}`
+                        : `Reduced by team cap (${reducedByKey.size}): ${reducedSummary}`}
                     </span>
                   )}
                 </div>
 
                 {boundsEntries.length > 0 && (
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
-                    {boundsEntries.map(([k, v]) => `${k}=${v}`).join(' \u00B7 ')}
+                    {boundsEntries.map(([k, v], i) => {
+                      const r = reducedByKey.get(k);
+                      return (
+                        <span key={k}>
+                          {i > 0 && ' · '}
+                          {r ? (
+                            <span title={`Team cap on ${k} is ${r.cap}; authorized for ${r.authorized}; effective ${r.cap}.`}>
+                              <span style={{ textDecoration: 'line-through', color: 'var(--text-tertiary)' }}>{k}={String(v)}</span>
+                              <span style={{ color: 'var(--danger)', marginLeft: '0.25rem', fontWeight: 600 }}>
+                                {'→'} {r.cap}
+                              </span>
+                            </span>
+                          ) : (
+                            <span>{k}={String(v)}</span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
 
