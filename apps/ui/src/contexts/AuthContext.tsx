@@ -72,7 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setActiveMembership(membership);
         setMode('team');
         setGroup(teamGroup);
-        const firstDomain = membership.domains[0] ?? teamGroup.myDomains[0] ?? 'owner';
+        // P4.6: team-group domain is the caller's userId (set by SP at attest time).
+        // Personal group domain stays 'owner' (set during login below).
+        const firstDomain = user?.id ?? membership.domains[0] ?? 'owner';
         setDomain(firstDomain);
       } else {
         setActiveTeam(null);

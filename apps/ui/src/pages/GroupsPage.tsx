@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { spClient } from '../lib/sp-client';
-import { DomainBadge } from '../components/DomainBadge';
 
 interface GroupDetail {
   id: string;
@@ -132,9 +131,6 @@ export function GroupsPage() {
               <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>
                 {groupDetail?.members?.length ?? 0} {(groupDetail?.members?.length ?? 0) === 1 ? 'member' : 'members'}
                 {activeTeam.isAdmin && ' · You are admin'}
-                {activeMembership?.domains?.length
-                  ? ` · Your domain${activeMembership.domains.length === 1 ? '' : 's'}: ${activeMembership.domains.join(', ')}`
-                  : ''}
               </p>
             </div>
             <span className="status-badge status-active">Active</span>
@@ -148,11 +144,6 @@ export function GroupsPage() {
               <div className="member-info">
                 <div className="member-name">{member.name}</div>
                 <div className="member-email">{member.email}</div>
-              </div>
-              <div className="member-domains">
-                {member.domains.map(d => (
-                  <DomainBadge key={d} domain={d} />
-                ))}
               </div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{member.role}</span>
             </div>
