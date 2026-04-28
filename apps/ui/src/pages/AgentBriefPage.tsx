@@ -56,6 +56,57 @@ export function AgentBriefPage() {
   const byteLength = new Blob([context]).size;
   const MAX_BYTES = 16 * 1024;
 
+  // Guard against navigating away with unsaved edits.
+  //
+  // Two listeners cover the two exit paths:
+  //   1. beforeunload — tab close, refresh, external URL, hard back/forward.
+  //      Fires the browser's native "Leave site?" dialog.
+  //   2. Document click capture — intercepts any same-origin <a> / <Link>
+  //      click (sidebar, mobile menu, in-page links) BEFORE react-router
+  //      processes it. If the user cancels, preventDefault stops the nav.
+  //
+  // We do NOT use useBlocker here — it requires the data-router
+  // (createBrowserRouter) setup, and this app uses the classic
+  // <BrowserRouter>/<Routes> JSX form. Intercepting clicks works with either.
+  //
+  // Programmatic navigate() calls within this page would bypass both guards,
+  // but this page doesn't navigate itself, so that gap is fine.
+  useEffect(() => {
+    if (!dirty) return;
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    const onClick = (e: MouseEvent) => {
+      // Modifier-clicks (new tab / window) and non-left-clicks aren't route
+      // changes from our perspective — let the browser handle them.
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const anchor = (e.target as HTMLElement | null)?.closest?.('a');
+      if (!anchor || !anchor.href) return;
+      let url: URL;
+      try {
+        url = new URL(anchor.href);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname === window.location.pathname) return; // same-page anchors
+      if (!confirm('You have unsaved changes to your agent brief. Leave anyway?')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('click', onClick, true);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('click', onClick, true);
+    };
+  }, [dirty]);
+
   // Initial load of context.md + preview.
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +167,17 @@ export function AgentBriefPage() {
           Standing orders for agents that connect via MCP. This text
           prepends every new session — keep it tight.
         </p>
+        {!context.trim() && !loadingContext && (
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleStarter}
+            disabled={saving}
+            title="Insert a starter brief covering HAP basics and example standing orders"
+            style={{ marginTop: '0.5rem' }}
+          >
+            Insert starter template
+          </button>
+        )}
       </div>
 
       {message && (
@@ -161,14 +223,6 @@ export function AgentBriefPage() {
             disabled={saving || !dirty}
           >
             Revert
-          </button>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={handleStarter}
-            disabled={saving || loadingContext}
-            title="Insert a starter brief covering HAP basics and example standing orders"
-          >
-            Insert starter template
           </button>
         </div>
       </div>

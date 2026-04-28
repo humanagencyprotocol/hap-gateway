@@ -9,7 +9,7 @@ interface NavItem {
   to: string;
   icon: string;
   label: string;
-  statusKey?: 'integrations' | 'assistant' | 'authorizations' | 'proposals';
+  statusKey?: 'integrations' | 'assistant' | 'authorizations' | 'proposals' | 'brief';
   teamOnly?: boolean;
 }
 
@@ -17,7 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/', icon: '\u25A1', label: 'Dashboard' },
   { to: '/proposals', icon: '\u25B7', label: 'Pending Approvals', statusKey: 'proposals' },
   { to: '/authorizations', icon: '\u2630', label: 'Authorizations', statusKey: 'authorizations' },
-  { to: '/agent-brief', icon: '▤', label: 'Agent Brief' },
+  { to: '/agent-brief', icon: '▤', label: 'Agent Brief', statusKey: 'brief' },
   { to: '/audit', icon: '\u25A3', label: 'Receipts' },
   { to: '/groups', icon: '\u25C9', label: 'Team', teamOnly: true },
   { to: '/integrations', icon: '\u29D7', label: 'Integrations', statusKey: 'integrations' },
@@ -35,10 +35,11 @@ function useOtherNavStatus() {
 
   const poll = useCallback(async () => {
     try {
-      const [aiStatus, authData, proposalData] = await Promise.all([
+      const [aiStatus, authData, proposalData, briefText] = await Promise.all([
         spClient.getCredential('ai-config').catch(() => null),
         spClient.getMyAttestations().catch(() => null),
         spClient.getProposals(activeDomain || 'owner').catch(() => null),
+        spClient.getAgentContext().catch(() => ''),
       ]);
 
       const next: Record<string, number> = {};
@@ -52,6 +53,8 @@ function useOtherNavStatus() {
       if (proposalData && proposalData.length > 0) {
         next.proposals = proposalData.length;
       }
+      // Empty agent brief → badge nudges the owner to author one.
+      if (!briefText || !briefText.trim()) next.brief = 1;
       setCounts(next);
     } catch {
       // ignore
