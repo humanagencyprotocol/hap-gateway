@@ -237,7 +237,6 @@ export function AgentReviewPage() {
         <div className="success-card-hash">{success.frameHash}</div>
         <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
           Status: <strong>{success.status}</strong>
-          {success.status === 'pending' && ' — waiting for other domain owners to attest'}
           {success.commitment === 'per-action' && (
             <div style={{ marginTop: '0.5rem' }}>
               Commitment: <strong>Review Mode</strong> — you will review and commit to each agent action individually.
@@ -495,9 +494,13 @@ export function AgentReviewPage() {
           </button>
         </div>
 
-        {mode === 'team' && (
+        {(profileConfig?.approvers?.length ?? 0) > 0 && (
           <div style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-tertiary)', textAlign: 'center' }}>
-            This attestation may be pending until other required domain owners also attest.
+            {forcedReview
+              ? `Above team cap. Every action under this authority will be reviewed by you and ${approverNames.join(', ')}.`
+              : (profileConfig?.caps && Object.keys(profileConfig.caps).length > 0)
+                ? `Within team cap. ${approverNames.join(', ')} will review actions only if bounds are exceeded.`
+                : `Approvers ${approverNames.join(', ')} can read your intent but won’t gate any action — no caps configured on this profile.`}
           </div>
         )}
       </div>
