@@ -497,7 +497,6 @@ app.get('/health', async (req: Request, res: Response) => {
   const update = getUpdateStatus();
   res.json({
     status: 'ok',
-    mode: HAP_MODE,
     vaultUnlocked: vault.isUnlocked(),
     version: update.runningSha,
     updateAvailable: update.updateAvailable,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { spClient, type SPGroup } from '../lib/sp-client';
+import { spClient } from '../lib/sp-client';
 import { DomainBadge } from '../components/DomainBadge';
 
 interface GroupDetail {
@@ -12,12 +12,13 @@ interface GroupDetail {
     email: string;
     domains: string[];
     role: string;
+    isAdmin: boolean;
   }>;
   inviteCode?: string;
 }
 
 export function GroupsPage() {
-  const { groups, setActiveContext, activeGroup, refreshGroups } = useAuth();
+  const { activeTeam, activeMembership, groups, setActiveContext, activeGroup, refreshGroups, user } = useAuth();
   const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
   const [inviteCode, setInviteCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -25,8 +26,10 @@ export function GroupsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
-  const selectedGroup = activeGroup || (groups.length > 0 ? groups[0] : null);
+  // selectedGroup: prefer activeTeam (the real team from SP), fall back to legacy activeGroup
+  const selectedGroup = activeTeam ?? activeGroup ?? (groups.length > 0 ? groups[0] : null);
 
   useEffect(() => {
     if (!selectedGroup) return;
@@ -35,18 +38,28 @@ export function GroupsPage() {
         // SP returns { group, members, isAdmin } — normalize it
         const g = (raw as any).group || raw;
         const rawMembers = (raw as any).members || g.members || [];
+        const isAdminFromSP = (raw as any).isAdmin ?? false;
         const members = rawMembers.map((m: any) => ({
           id: m.userId || m.id || '',
           name: m.name || m.userId?.slice(0, 8) || 'Member',
           email: m.email || '',
           domains: m.domains || [],
-          role: m.role || ((raw as any).isAdmin && m.userId === g.createdBy ? 'admin' : 'member'),
+          role: m.role || (isAdminFromSP && m.userId === g.createdBy ? 'admin' : 'member'),
+          isAdmin: m.role === 'admin' || (isAdminFromSP && m.userId === g.createdBy),
         }));
         setGroupDetail({ id: g.id, name: g.name, members, inviteCode: g.inviteCode });
         setInviteCode(g.inviteCode || '');
       })
       .catch(() => {});
   }, [selectedGroup?.id]);
+
+  // Determine if the current user is the sole admin of the active team.
+  // Used to show a disabled leave button with an explanatory tooltip.
+  const adminMembers = groupDetail?.members.filter(m => m.isAdmin) ?? [];
+  const isSoleAdmin =
+    selectedGroup?.isAdmin === true &&
+    adminMembers.length <= 1 &&
+    adminMembers.some(m => m.id === user?.id);
 
   const handleGenerateInvite = async () => {
     if (!selectedGroup) return;
@@ -95,6 +108,23 @@ export function GroupsPage() {
     }
   };
 
+  const handleLeave = async () => {
+    if (!selectedGroup) return;
+    setLoading(true);
+    setError('');
+    setShowLeaveConfirm(false);
+    try {
+      await spClient.leaveTeam(selectedGroup.id);
+      await refreshGroups();
+      setSuccessMsg('You have left the team.');
+      setGroupDetail(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to leave team');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const copyInvite = () => {
     navigator.clipboard.writeText(inviteCode);
     setSuccessMsg('Copied to clipboard!');
@@ -123,7 +153,7 @@ export function GroupsPage() {
             <div>
               <h3 className="card-title">{selectedGroup.name}</h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: '0.125rem' }}>
-                {groupDetail?.members?.length || 0} members {selectedGroup.isAdmin && ' \u00B7 You are admin'}
+                {groupDetail?.members?.length || 0} members {selectedGroup.isAdmin && ' · You are admin'}
               </p>
             </div>
             <span className="status-badge status-active">Active</span>
@@ -160,6 +190,45 @@ export function GroupsPage() {
               <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{member.role}</span>
             </div>
           ))}
+
+          {/* Leave team button — only shown when user has an active team membership */}
+          {activeMembership && (
+            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+              {showLeaveConfirm ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                    Leave {selectedGroup.name}? Your active authorizations will be revoked.
+                  </span>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{ color: 'var(--error, #e53e3e)' }}
+                    onClick={handleLeave}
+                    disabled={loading}
+                  >
+                    Confirm leave
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setShowLeaveConfirm(false)}
+                    disabled={loading}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <span title={isSoleAdmin ? 'Transfer admin first or delete the team' : undefined}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--text-tertiary)' }}
+                    onClick={() => setShowLeaveConfirm(true)}
+                    disabled={loading || isSoleAdmin}
+                  >
+                    Leave team
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 

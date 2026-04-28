@@ -1,6 +1,6 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { spClient } from '../lib/sp-client';
 import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { useIntegrationStatus } from '../contexts/IntegrationStatusContext';
@@ -14,14 +14,14 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', icon: '\u25A1', label: 'Dashboard' },
-  { to: '/proposals', icon: '\u25B7', label: 'Pending Approvals', statusKey: 'proposals' },
-  { to: '/authorizations', icon: '\u2630', label: 'Authorizations', statusKey: 'authorizations' },
+  { to: '/', icon: '□', label: 'Dashboard' },
+  { to: '/proposals', icon: '▷', label: 'Pending Approvals', statusKey: 'proposals' },
+  { to: '/authorizations', icon: '☰', label: 'Authorizations', statusKey: 'authorizations' },
   { to: '/agent-brief', icon: '▤', label: 'Agent Brief', statusKey: 'brief' },
-  { to: '/audit', icon: '\u25A3', label: 'Receipts' },
-  { to: '/groups', icon: '\u25C9', label: 'Team', teamOnly: true },
-  { to: '/integrations', icon: '\u29D7', label: 'Integrations', statusKey: 'integrations' },
-  { to: '/settings', icon: '\u2699', label: 'AI Assistant', statusKey: 'assistant' },
+  { to: '/audit', icon: '▣', label: 'Receipts' },
+  { to: '/groups', icon: '◉', label: 'Team', teamOnly: true },
+  { to: '/integrations', icon: '⧗', label: 'Integrations', statusKey: 'integrations' },
+  { to: '/settings', icon: '⚙', label: 'AI Assistant', statusKey: 'assistant' },
 ];
 
 /**
@@ -81,14 +81,58 @@ const BADGE_STYLE: React.CSSProperties = {
   flexShrink: 0,
 };
 
+const TOAST_STYLE: React.CSSProperties = {
+  position: 'fixed',
+  bottom: '1.5rem',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  background: 'var(--bg-elevated, #1e1e2e)',
+  color: 'var(--text-primary, #e2e8f0)',
+  border: '1px solid var(--border)',
+  borderRadius: '0.5rem',
+  padding: '0.625rem 1rem',
+  fontSize: '0.85rem',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+  zIndex: 9999,
+  whiteSpace: 'nowrap',
+  pointerEvents: 'none',
+};
+
 export function Sidebar() {
-  const { mode, group, domain } = useAuth();
+  const { mode, group, domain, activeTeam } = useAuth();
   const other = useOtherNavStatus();
   const { attentionCount } = useIntegrationStatus();
   const counts: Record<string, number> = { ...other };
   if (attentionCount > 0) counts.integrations = attentionCount;
 
   const visibleItems = NAV_ITEMS.filter(item => !item.teamOnly || mode === 'team');
+
+  // Mode-flip toast — fires when mode changes after the initial render.
+  // Dismissed automatically on next navigation (location change).
+  const prevMode = useRef<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Skip the very first render — we don't want a toast on page load.
+    if (prevMode.current === null) {
+      prevMode.current = mode;
+      return;
+    }
+    if (prevMode.current === mode) return;
+
+    if (mode === 'team' && activeTeam) {
+      setToastMsg(`You are now acting in team context — ${activeTeam.name}`);
+    } else if (mode === 'personal') {
+      setToastMsg('You have left the team — back to personal context');
+    }
+    prevMode.current = mode;
+  }, [mode, activeTeam]);
+
+  // Dismiss toast on navigation
+  useEffect(() => {
+    setToastMsg(null);
+  }, [location.pathname]);
 
   return (
     <div className="sidebar">
@@ -116,6 +160,12 @@ export function Sidebar() {
           {mode === 'personal' ? 'personal' : group ? `${group.name} / ${domain}` : domain}
         </div>
       </div>
+
+      {toastMsg && (
+        <div style={TOAST_STYLE} role="status" aria-live="polite">
+          {toastMsg}
+        </div>
+      )}
     </div>
   );
 }

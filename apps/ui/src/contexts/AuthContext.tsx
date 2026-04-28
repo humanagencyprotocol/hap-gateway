@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { spClient, type SPUser, type SPGroup } from '../lib/sp-client';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { spClient, type SPUser, type SPGroup, type GroupMember } from '../lib/sp-client';
 
 export type GatewayMode = 'personal' | 'team';
 
@@ -12,6 +12,10 @@ interface AuthContextValue {
   domain: string;
   /** In team mode: the group ID. Personal: null. */
   groupId: string | null;
+  /** The active team group (null for personal-only users). */
+  activeTeam: SPGroup | null;
+  /** The caller's active membership record (null for personal-only users). */
+  activeMembership: GroupMember | null;
   isLoading: boolean;
   error: string;
   login: (apiKey: string) => Promise<void>;
@@ -27,7 +31,7 @@ interface AuthContextValue {
   groups: SPGroup[];
   /** @deprecated No longer needed */
   setActiveContext: (group: SPGroup | null, domain: string) => void;
-  /** @deprecated No longer needed */
+  /** Refreshes team membership from SP and recomputes mode. */
   refreshGroups: () => Promise<void>;
 }
 
@@ -38,64 +42,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<GatewayMode>('personal');
   const [group, setGroup] = useState<SPGroup | null>(null);
   const [domain, setDomain] = useState('');
+  const [activeTeam, setActiveTeam] = useState<SPGroup | null>(null);
+  const [activeMembership, setActiveMembership] = useState<GroupMember | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Fetch mode from control plane health endpoint on mount
-  useEffect(() => {
-    fetch('/health')
-      .then(r => r.json())
-      .then(data => {
-        if (data.mode === 'team' || data.mode === 'personal') {
-          setMode(data.mode);
-        }
-      })
-      .catch(() => {}); // default to personal
+  // Track whether we have an active API key (user is logged in) so
+  // visibilitychange handler knows whether to fire refreshGroups.
+  const hasApiKey = useRef(false);
+
+  /**
+   * Fetches /api/groups/me, updates activeTeam + activeMembership,
+   * and computes mode = activeMembership ? 'team' : 'personal'.
+   * Also syncs the legacy `group` / `domain` state for back-compat.
+   */
+  const refreshGroups = useCallback(async () => {
+    if (!hasApiKey.current) return;
+    try {
+      const result = await spClient.getMyTeam();
+      if (result) {
+        const { group: teamGroup, membership } = result;
+        setActiveTeam(teamGroup);
+        setActiveMembership(membership);
+        setMode('team');
+        setGroup(teamGroup);
+        const firstDomain = membership.domains[0] ?? teamGroup.myDomains[0] ?? 'owner';
+        setDomain(firstDomain);
+      } else {
+        setActiveTeam(null);
+        setActiveMembership(null);
+        setMode('personal');
+        // Keep existing personal group in `group` state; don't wipe domain
+        // because we may have set it during login from getGroups.
+      }
+    } catch {
+      // Network error — leave existing state as-is
+    }
   }, []);
+
+  // Refresh on tab refocus — catches joins/leaves done in another tab or SP UI
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshGroups();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [refreshGroups]);
 
   const login = useCallback(async (apiKey: string) => {
     setIsLoading(true);
     setError('');
     try {
       spClient.setApiKey(apiKey);
+      hasApiKey.current = true;
       const u = await spClient.login(apiKey);
       setUser(u);
 
-      // v0.4: every user has a personal group auto-provisioned at registration.
-      // In personal mode the gateway uses that group as the parent for every
-      // attestation; in team mode it picks the (first) team group instead.
-      // Either way, group is non-null and group_id is always sent on attest.
+      // Always seed the personal group so group_id is non-null for personal mode.
+      // We call getGroups once to get the personal group, then refreshGroups to
+      // get the true team membership state from the SP singleton endpoint.
       const allGroups = await spClient.getGroups();
+      const personal = allGroups.find(g => g.isPersonal) ?? allGroups[0] ?? null;
+      setGroup(personal);
+      setDomain('owner');
 
-      if (mode === 'personal') {
-        const personal = allGroups.find(g => g.isPersonal) ?? null;
-        setGroup(personal);
-        setDomain('owner');
-      } else {
-        const teamGroup =
-          allGroups.find(g => !g.isPersonal && !g.isAdmin) ??
-          allGroups.find(g => !g.isPersonal) ??
-          null;
-        setGroup(teamGroup);
-        if (teamGroup && teamGroup.myDomains.length > 0) {
-          setDomain(teamGroup.myDomains[0]);
-        }
-      }
+      // Derive mode from real membership — replaces the old HAP_MODE env branch
+      await refreshGroups();
     } catch (e) {
       spClient.clearApiKey();
+      hasApiKey.current = false;
       setError(e instanceof Error ? e.message : 'Login failed');
       throw e;
     } finally {
       setIsLoading(false);
     }
-  }, [mode]);
+  }, [refreshGroups]);
 
   const logout = useCallback(async () => {
     await spClient.logout();
     spClient.clearApiKey();
+    hasApiKey.current = false;
     setUser(null);
     setGroup(null);
     setDomain('');
+    setActiveTeam(null);
+    setActiveMembership(null);
+    setMode('personal');
     setError('');
   }, []);
 
@@ -106,12 +140,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setGroup(g);
     setDomain(d);
   }, []);
-  const refreshGroups = useCallback(async () => {}, []);
 
   return (
     <AuthContext.Provider value={{
       user, mode, group, domain,
       groupId: group?.id ?? null,
+      activeTeam,
+      activeMembership,
       isLoading, error, login, logout, clearError,
       // Backward compat aliases
       activeGroup: group,

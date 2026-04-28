@@ -204,7 +204,7 @@ export function createGatedToolHandler(
       }
       if (result.approved) {
         // Check for deferred commitment domains — submit proposal instead of executing
-        if (auth.deferredCommitmentDomains.length > 0) {
+        if ((auth.deferredCommitmentDomains ?? []).length > 0) {
           try {
             const enrichedArgs = await attachImagePreview(args);
             const { proposal } = await state.spClient.submitProposal({

@@ -22,6 +22,17 @@ export interface SPGroup {
   isPersonal?: boolean;
 }
 
+export interface GroupMember {
+  groupId: string;
+  userId: string;
+  domains: string[];
+  joinedAt: number;
+  role: string;
+  status?: 'active' | 'disabled';
+  disabledAt?: number;
+  disabledBy?: string;
+}
+
 export interface AttestResponse {
   attestation_id: string;
   frame_hash?: string;    // v0.3
@@ -391,6 +402,46 @@ class SPClient {
       throw new Error(err.error || `Invite failed: ${res.status}`);
     }
     return res.json();
+  }
+
+  /**
+   * Returns the caller's active team group + membership, or null for personal-only users.
+   * SP endpoint: GET /api/groups/me (Phase 1 addition).
+   */
+  async getMyTeam(): Promise<{ group: SPGroup; membership: GroupMember } | null> {
+    const res = await this.fetch('/api/groups/me');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.group ? { group: data.group, membership: data.membership } : null;
+  }
+
+  async setPubkey(pubkey: string): Promise<void> {
+    const res = await this.fetch('/api/users/me/pubkey', {
+      method: 'PUT',
+      body: JSON.stringify({ pubkey }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to set pubkey' }));
+      throw new Error(err.error || `setPubkey failed: ${res.status}`);
+    }
+  }
+
+  async getPubkey(userId: string): Promise<string | null> {
+    const res = await this.fetch(`/api/users/${encodeURIComponent(userId)}/pubkey`);
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.pubkey ?? null;
+  }
+
+  async leaveTeam(groupId: string): Promise<void> {
+    const res = await this.fetch(`/api/groups/${encodeURIComponent(groupId)}/leave`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to leave team' }));
+      throw new Error(err.error || `Leave failed: ${res.status}`);
+    }
   }
 
   // ─── Vault ────────────────────────────────────────────────────────────
